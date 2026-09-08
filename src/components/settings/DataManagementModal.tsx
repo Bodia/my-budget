@@ -3,13 +3,11 @@ import {
   Download, 
   Upload, 
   Trash2, 
-  Sparkles, 
   Save, 
   Check 
 } from 'lucide-react';
 import type { Category, Budget, CategorizationRule } from '../../types/finance';
 import { db } from '../../db/database';
-import { seedDemoData } from '../../services/demo/seedData';
 
 interface DataManagementModalProps {
   categories: Category[];
@@ -136,19 +134,6 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
             <span>Відновити з бекапу</span>
             <input type="file" accept=".json" onChange={handleImportBackup} style={{ display: 'none' }} />
           </label>
-
-          <button
-            onClick={async () => {
-              if (window.confirm('Завантажити 12 місяців тестових операцій Monobank та Toshl? Поточні дані буде замінено.')) {
-                await seedDemoData();
-                onReload();
-              }
-            }}
-            className="btn btn-secondary btn-sm"
-          >
-            <Sparkles size={15} color="#722ed1" />
-            <span>Перезавантажити демо-дані</span>
-          </button>
 
           <button onClick={handleClearDatabase} className="btn btn-danger btn-sm" style={{ marginLeft: 'auto' }}>
             <Trash2 size={15} />

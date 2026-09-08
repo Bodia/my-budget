@@ -5,8 +5,7 @@ import {
   CheckCircle2, 
   AlertCircle, 
   ArrowRight, 
-  Loader2,
-  Info
+  Loader2
 } from 'lucide-react';
 import type { ImportSummary } from '../../types/finance';
 import { processStatementFile, commitImport } from '../../services/parsers/ingestionManager';
@@ -15,7 +14,7 @@ import { formatUah } from '../../services/analytics/kpiCalculator';
 interface ImportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (count: number, replacedDemoCount: number) => void;
+  onSuccess: (count: number) => void;
 }
 
 export const ImportModal: React.FC<ImportModalProps> = ({
@@ -58,8 +57,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({
       onClose();
       return;
     }
-    const res = await commitImport(summary.draftTransactions);
-    onSuccess(res.importedCount, res.replacedDemoCount);
+    const count = await commitImport(summary.draftTransactions);
+    onSuccess(count);
     onClose();
   };
 
@@ -209,27 +208,6 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                 </span>
               </div>
 
-              {/* Demo Data Replacement Alert */}
-              {summary.hasDemoDataToReplace && (
-                <div style={{
-                  padding: '12px 16px',
-                  borderRadius: 'var(--radius-sm)',
-                  background: 'rgba(22, 119, 255, 0.08)',
-                  border: '1px solid rgba(22, 119, 255, 0.3)',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: 12,
-                }}>
-                  <Info size={18} color="var(--primary)" style={{ marginTop: 2, flexShrink: 0 }} />
-                  <div style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.5 }}>
-                    <div style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: 2 }}>
-                      Автоматична заміна демо-даних
-                    </div>
-                    У базі виявлено <strong>{summary.demoRowsCount} тестових операцій</strong>. При імпорті їх буде <strong>повністю видалено</strong>, а замість них збережуться ваші реальні дані з файлу.
-                  </div>
-                </div>
-              )}
-
               {/* Preview of first rows */}
               {summary.previewRows.length > 0 && (
                 <div>
@@ -295,11 +273,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
               disabled={summary.newRows === 0}
               className="btn btn-primary btn-sm"
             >
-              <span>
-                {summary.hasDemoDataToReplace
-                  ? `Замінити демо на реальні (${summary.newRows} оп.)`
-                  : `Застосувати (${summary.newRows} операцій)`}
-              </span>
+              <span>Застосувати ({summary.newRows} операцій)</span>
               <ArrowRight size={14} />
             </button>
           )}

@@ -17,7 +17,6 @@ export interface Transaction {
   accountId: string;        // E.g. "Монобанка Чорна", "Toshl Wallet", "Готівка"
   notes?: string;           // Optional user notes
   isSubscription?: boolean; // Flagged by smart insight engine
-  isDemo?: boolean;         // True if generated as part of the demo dataset
 }
 
 export interface Category {
@@ -86,8 +85,6 @@ export interface ImportSummary {
   duplicateRows: number;
   previewRows: Transaction[];
   draftTransactions: Transaction[];
-  hasDemoDataToReplace?: boolean;
-  demoRowsCount?: number;
 }
 
 export interface DateFilterRange {

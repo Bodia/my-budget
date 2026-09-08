@@ -6,7 +6,6 @@ import {
   Receipt, 
   Settings, 
   UploadCloud, 
-  Sparkles, 
   Moon, 
   Sun 
 } from 'lucide-react';
@@ -18,26 +17,22 @@ interface HeaderProps {
   activeTab: ActiveNavTab;
   onSelectTab: (tab: ActiveNavTab) => void;
   onOpenImport: () => void;
-  onLoadDemo: () => void;
   currency: CurrencyCode;
   onChangeCurrency: (c: CurrencyCode) => void;
   isDark: boolean;
   onToggleTheme: () => void;
   totalTransactionsCount: number;
-  isDemoActive?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   activeTab,
   onSelectTab,
   onOpenImport,
-  onLoadDemo,
   currency,
   onChangeCurrency,
   isDark,
   onToggleTheme,
   totalTransactionsCount,
-  isDemoActive = false,
 }) => {
   return (
     <header style={{
@@ -81,40 +76,11 @@ export const Header: React.FC<HeaderProps> = ({
               fontWeight: 700,
               color: 'var(--text-primary)',
               letterSpacing: '-0.02em',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
             }}>
               My Budget
-              <span className="badge badge-primary" style={{ fontSize: 11, padding: '1px 6px' }}>
-                Local-First
-              </span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-              <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-                {totalTransactionsCount > 0 ? `${totalTransactionsCount} операцій` : '0 операцій'}
-              </span>
-              <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>•</span>
-              <span style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-                fontSize: 10,
-                fontWeight: 600,
-                padding: '1px 6px',
-                borderRadius: 8,
-                background: isDemoActive ? 'rgba(250, 173, 20, 0.12)' : 'rgba(82, 196, 26, 0.12)',
-                color: isDemoActive ? '#d48806' : '#389e0d',
-                border: `1px solid ${isDemoActive ? 'rgba(250, 173, 20, 0.3)' : 'rgba(82, 196, 26, 0.3)'}`,
-              }}>
-                <span style={{
-                  width: 5,
-                  height: 5,
-                  borderRadius: '50%',
-                  background: isDemoActive ? '#faad14' : '#52c41a',
-                }} />
-                {isDemoActive ? '🧪 Демо-дані' : '🔒 Ваші реальні дані'}
-              </span>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1 }}>
+              {totalTransactionsCount > 0 ? `${totalTransactionsCount} операцій` : 'Журнал фінансів'}
             </div>
           </div>
         </div>
@@ -210,16 +176,6 @@ export const Header: React.FC<HeaderProps> = ({
             style={{ padding: '6px 8px' }}
           >
             {isDark ? <Sun size={15} color="#faad14" /> : <Moon size={15} color="#1677ff" />}
-          </button>
-
-          {/* Demo Button if database empty or for testing */}
-          <button
-            onClick={onLoadDemo}
-            className="btn btn-secondary btn-sm"
-            title="Завантажити 12 місяців тестових операцій Monobank та Toshl"
-          >
-            <Sparkles size={14} color="#722ed1" />
-            <span>Демо-дані</span>
           </button>
 
           {/* Import Button */}

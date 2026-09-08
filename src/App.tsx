@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, UploadCloud } from 'lucide-react';
 
 import { db } from './db/database';
-import { seedDemoData } from './services/demo/seedData';
 import { 
   calculateKPIs, 
   calculateCategoryBreakdown, 
@@ -51,22 +50,16 @@ export const App: React.FC = () => {
     }
   }, [isDark]);
 
-  // Whether the current database is populated with demo data
-  const isDemoActive = useMemo(() => {
-    return !!rawTransactions?.some(t => t.isDemo || t.id.startsWith('demo_'));
-  }, [rawTransactions]);
-
-  // Seed demo data on initial load if database is empty and not initialized yet
+  // Remove any legacy demo data from IndexedDB immediately on launch
   useEffect(() => {
-    const checkAndSeed = async () => {
-      const hasInitialized = localStorage.getItem('my_budget_initialized');
-      const count = await db.transactions.count();
-      if (!hasInitialized && count === 0) {
-        localStorage.setItem('my_budget_initialized', 'true');
-        await seedDemoData();
+    const purgeExistingDemoData = async () => {
+      const all = await db.transactions.toArray();
+      const demoIds = all.filter(t => t.id.startsWith('demo_')).map(t => t.id);
+      if (demoIds.length > 0) {
+        await db.transactions.bulkDelete(demoIds);
       }
     };
-    checkAndSeed();
+    purgeExistingDemoData();
   }, []);
 
   const showToast = (msg: string) => {
@@ -130,16 +123,11 @@ export const App: React.FC = () => {
         activeTab={activeTab}
         onSelectTab={setActiveTab}
         onOpenImport={() => setIsImportModalOpen(true)}
-        onLoadDemo={async () => {
-          await seedDemoData();
-          showToast('Демо-дані за 12 місяців успішно завантажено!');
-        }}
         currency={currency}
         onChangeCurrency={setCurrency}
         isDark={isDark}
         onToggleTheme={() => setIsDark(prev => !prev)}
         totalTransactionsCount={rawTransactions?.length || 0}
-        isDemoActive={isDemoActive}
       />
 
       {/* Global Toast Alert */}
@@ -234,6 +222,49 @@ export const App: React.FC = () => {
         {/* TAB 1: DASHBOARD */}
         {activeTab === 'dashboard' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            {/* Empty State Banner when database is clean */}
+            {(!rawTransactions || rawTransactions.length === 0) && (
+              <div className="ant-card" style={{
+                padding: '40px 24px',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 14,
+                background: 'linear-gradient(180deg, var(--bg-card) 0%, var(--bg-surface-hover) 100%)',
+                border: '1.5px dashed var(--primary-border)',
+                borderRadius: 'var(--radius-lg)',
+              }}>
+                <div style={{
+                  width: 58,
+                  height: 58,
+                  borderRadius: '50%',
+                  background: 'rgba(22, 119, 255, 0.1)',
+                  color: 'var(--primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  <UploadCloud size={28} />
+                </div>
+                <div style={{ maxWidth: 520 }}>
+                  <h2 style={{ fontSize: 20, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--text-primary)', marginBottom: 6 }}>
+                    База готова до ваших даних
+                  </h2>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                    Демо-дані видалено. Завантажте файл виписки з Monobank (.xlsx, .csv) або Toshl Finance, щоб побудувати інтерактивні графіки та побачити рекомендації з економії.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: 4 }}>
+                  <button onClick={() => setIsImportModalOpen(true)} className="btn btn-primary btn-sm" style={{ padding: '8px 20px', fontSize: 13 }}>
+                    <UploadCloud size={16} />
+                    <span>Імпортувати виписку</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* KPI Cards */}
             <KPICards kpi={kpi} />
 
@@ -349,13 +380,8 @@ export const App: React.FC = () => {
       <ImportModal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
-        onSuccess={(count, replacedDemoCount) => {
-          localStorage.setItem('my_budget_initialized', 'true');
-          if (replacedDemoCount > 0) {
-            showToast(`Демо-дані (${replacedDemoCount} оп.) замінено на ${count} реальних операцій!`);
-          } else {
-            showToast(`Успішно імпортовано ${count} нових операцій!`);
-          }
+        onSuccess={(count) => {
+          showToast(`Успішно імпортовано ${count} нових операцій!`);
         }}
       />
     </div>
