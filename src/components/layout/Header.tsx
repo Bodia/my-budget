@@ -24,6 +24,7 @@ interface HeaderProps {
   isDark: boolean;
   onToggleTheme: () => void;
   totalTransactionsCount: number;
+  isDemoActive?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -36,6 +37,7 @@ export const Header: React.FC<HeaderProps> = ({
   isDark,
   onToggleTheme,
   totalTransactionsCount,
+  isDemoActive = false,
 }) => {
   return (
     <header style={{
@@ -88,8 +90,31 @@ export const Header: React.FC<HeaderProps> = ({
                 Local-First
               </span>
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-              {totalTransactionsCount > 0 ? `${totalTransactionsCount} операцій у базі` : 'Без хмарних серверів'}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+              <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                {totalTransactionsCount > 0 ? `${totalTransactionsCount} операцій` : '0 операцій'}
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>•</span>
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                fontSize: 10,
+                fontWeight: 600,
+                padding: '1px 6px',
+                borderRadius: 8,
+                background: isDemoActive ? 'rgba(250, 173, 20, 0.12)' : 'rgba(82, 196, 26, 0.12)',
+                color: isDemoActive ? '#d48806' : '#389e0d',
+                border: `1px solid ${isDemoActive ? 'rgba(250, 173, 20, 0.3)' : 'rgba(82, 196, 26, 0.3)'}`,
+              }}>
+                <span style={{
+                  width: 5,
+                  height: 5,
+                  borderRadius: '50%',
+                  background: isDemoActive ? '#faad14' : '#52c41a',
+                }} />
+                {isDemoActive ? '🧪 Демо-дані' : '🔒 Ваші реальні дані'}
+              </span>
             </div>
           </div>
         </div>

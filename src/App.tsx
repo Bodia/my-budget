@@ -51,11 +51,18 @@ export const App: React.FC = () => {
     }
   }, [isDark]);
 
-  // Seed demo data on initial load if database is empty
+  // Whether the current database is populated with demo data
+  const isDemoActive = useMemo(() => {
+    return !!rawTransactions?.some(t => t.isDemo || t.id.startsWith('demo_'));
+  }, [rawTransactions]);
+
+  // Seed demo data on initial load if database is empty and not initialized yet
   useEffect(() => {
     const checkAndSeed = async () => {
+      const hasInitialized = localStorage.getItem('my_budget_initialized');
       const count = await db.transactions.count();
-      if (count === 0) {
+      if (!hasInitialized && count === 0) {
+        localStorage.setItem('my_budget_initialized', 'true');
         await seedDemoData();
       }
     };
@@ -132,6 +139,7 @@ export const App: React.FC = () => {
         isDark={isDark}
         onToggleTheme={() => setIsDark(prev => !prev)}
         totalTransactionsCount={rawTransactions?.length || 0}
+        isDemoActive={isDemoActive}
       />
 
       {/* Global Toast Alert */}
@@ -341,8 +349,13 @@ export const App: React.FC = () => {
       <ImportModal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
-        onSuccess={(count) => {
-          showToast(`Успішно імпортовано ${count} нових операцій!`);
+        onSuccess={(count, replacedDemoCount) => {
+          localStorage.setItem('my_budget_initialized', 'true');
+          if (replacedDemoCount > 0) {
+            showToast(`Демо-дані (${replacedDemoCount} оп.) замінено на ${count} реальних операцій!`);
+          } else {
+            showToast(`Успішно імпортовано ${count} нових операцій!`);
+          }
         }}
       />
     </div>

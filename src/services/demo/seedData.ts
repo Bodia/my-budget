@@ -148,7 +148,7 @@ export async function generateDemoDataset(): Promise<Transaction[]> {
     }
   }
 
-  return transactions;
+  return transactions.map(t => ({ ...t, isDemo: true }));
 }
 
 export async function seedDemoData(): Promise<number> {

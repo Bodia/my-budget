@@ -49,9 +49,15 @@ export async function processStatementFile(file: File): Promise<ImportSummary> {
     draftTransactions = await parseMonobankRows(rawRows, 'generic_account');
   }
 
-  // Fetch existing hashes from DB for deduplication
+  // Fetch existing records from DB
   const existingRecords = await db.transactions.toArray();
-  const existingHashes = new Set<string>(existingRecords.map(t => t.hash));
+  const demoRecords = existingRecords.filter(t => t.isDemo || t.id.startsWith('demo_'));
+  const hasDemoDataToReplace = demoRecords.length > 0;
+
+  // For deduplication against existing DB, only consider real records
+  // so imported files aren't falsely deduplicated against synthetic demo records
+  const realRecords = existingRecords.filter(t => !t.isDemo && !t.id.startsWith('demo_'));
+  const existingHashes = new Set<string>(realRecords.map(t => t.hash));
 
   const { unique, duplicatesCount } = deduplicateDrafts(draftTransactions, existingHashes);
 
@@ -63,11 +69,35 @@ export async function processStatementFile(file: File): Promise<ImportSummary> {
     duplicateRows: duplicatesCount,
     previewRows: unique.slice(0, 8),
     draftTransactions: unique,
+    hasDemoDataToReplace,
+    demoRowsCount: demoRecords.length,
   };
 }
 
-export async function commitImport(transactions: Transaction[]): Promise<number> {
-  if (!transactions.length) return 0;
-  await db.transactions.bulkAdd(transactions);
-  return transactions.length;
+export interface CommitImportResult {
+  importedCount: number;
+  replacedDemoCount: number;
+}
+
+export async function commitImport(transactions: Transaction[]): Promise<CommitImportResult> {
+  if (!transactions.length) return { importedCount: 0, replacedDemoCount: 0 };
+
+  // If there are demo transactions in database, purge them so real data replaces demo data
+  const allCurrent = await db.transactions.toArray();
+  const demoIds = allCurrent
+    .filter(t => t.isDemo || t.id.startsWith('demo_'))
+    .map(t => t.id);
+
+  if (demoIds.length > 0) {
+    await db.transactions.bulkDelete(demoIds);
+  }
+
+  // Ensure imported records are explicitly marked isDemo: false
+  const sanitized = transactions.map(t => ({ ...t, isDemo: false }));
+  await db.transactions.bulkAdd(sanitized);
+
+  return {
+    importedCount: sanitized.length,
+    replacedDemoCount: demoIds.length,
+  };
 }
