@@ -27,15 +27,18 @@ The **Personal Finance Visualization & Budgeting Portal** is a high-performance,
 * **Data Parsing**:
   * `xlsx` (SheetJS) for binary and modern Excel files (`.xlsx`, `.xls`).
   * `papaparse` for structured CSV parsing.
-* **Visualization & Charts**:
-  * `Chart.js` + `react-chartjs-2` for responsive, animated Donut, Bar, and Line charts.
-  * Custom SVG/CSS Grid components for the contribution-style Calendar Expense Heatmap.
+* **Visualization & Charts (Ant Design Style)**:
+  * **`@ant-design/plots` (AntV G2)** / Ant Design Charts styling for premium, ultra-polished enterprise aesthetics:
+    * **Interactive Donut Chart** with central metric summary (`statistic`), smooth hover animations, and elegant legend.
+    * **Smooth Area / Dual-Axes Column Chart** with gradient fills for Income vs. Expense trends.
+    * **Horizontal Bar / Column Charts** with rounded corners and clean value labels for Top Merchants.
+    * **Ant Design Calendar Heatmap** for daily expenditure density.
+    * **Bullet & Progress Gauges** for category budget limits.
 * **Icons & Typography**:
-  * `lucide-react` for consistent financial and navigation iconography.
+  * `lucide-react` / `@ant-design/icons` for consistent financial and navigation iconography.
   * Google Fonts: `Inter` / `Outfit` font pairings.
 * **Styling & Design System**:
-  * Modern Vanilla CSS / Tailwind CSS design system with HSL design tokens.
-  * Full support for dark and light modes, subtle glassmorphism (`backdrop-filter: blur()`), responsive layouts (Desktop, Tablet, Mobile), and micro-animations.
+  * Modern Ant Design inspired design language: clean card borders, sleek dark/light theme, subtle glassmorphism, harmonious HSL palettes, and refined micro-interactions.
 
 ### 2.2 System Architecture Diagram
 
