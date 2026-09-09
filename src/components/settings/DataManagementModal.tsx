@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import type { Category, Budget, CategorizationRule } from '../../types/finance';
 import { db } from '../../db/database';
+import { CardsManager } from './CardsManager';
 
 interface DataManagementModalProps {
   categories: Category[];
@@ -33,14 +34,16 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
     const allCategories = await db.categories.toArray();
     const allBudgets = await db.budgets.toArray();
     const allRules = await db.rules.toArray();
+    const allAccounts = await db.accounts.toArray();
 
     const backupData = {
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
       transactions,
       categories: allCategories,
       budgets: allBudgets,
       rules: allRules,
+      accounts: allAccounts,
     };
 
     const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
@@ -71,6 +74,10 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
           if (json.rules) {
             await db.rules.clear();
             await db.rules.bulkAdd(json.rules);
+          }
+          if (json.accounts && Array.isArray(json.accounts)) {
+            await db.accounts.clear();
+            await db.accounts.bulkAdd(json.accounts);
           }
           alert(`Успішно відновлено ${json.transactions.length} операцій!`);
           onReload();
@@ -141,6 +148,9 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Bank Cards & Accounts Manager */}
+      <CardsManager onNotify={onReload} />
 
       {/* Monthly Budget Limits Configuration */}
       <div className="ant-card" style={{ padding: 24 }}>

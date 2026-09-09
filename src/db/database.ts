@@ -201,13 +201,28 @@ class PersonalFinanceDB extends Dexie {
       accounts: 'id',
     });
 
+    this.version(2).stores({
+      transactions: 'id, hash, date, categoryId, source, accountId, cardLast4',
+      accounts: 'id, cardLast4',
+    }).upgrade(async (tx) => {
+      const accountsTable = tx.table('accounts');
+      const mono = await accountsTable.get('monobank_black');
+      if (mono && !mono.cardLast4) {
+        await accountsTable.update('monobank_black', {
+          cardLast4: '1234',
+          cardNumberMasked: '**** **** **** 1234',
+          color: '#1677ff',
+        });
+      }
+    });
+
     this.on('populate', () => {
       this.categories.bulkAdd(DEFAULT_CATEGORIES);
       this.budgets.bulkAdd(DEFAULT_BUDGETS);
       this.rules.bulkAdd(DEFAULT_RULES);
       this.exchangeRates.bulkAdd(DEFAULT_EXCHANGE_RATES);
       this.accounts.bulkAdd([
-        { id: 'monobank_black', name: 'Monobank Чорна', type: 'bank_card', currency: 'UAH' },
+        { id: 'monobank_black', name: 'Monobank Чорна', type: 'bank_card', currency: 'UAH', cardLast4: '1234', cardNumberMasked: '**** **** **** 1234', color: '#1677ff' },
         { id: 'cash', name: 'Готівка', type: 'cash', currency: 'UAH' },
       ]);
     });

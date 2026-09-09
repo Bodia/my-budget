@@ -1,5 +1,6 @@
 import type { Transaction } from '../../types/finance';
 import { computeTransactionHash } from './deduplication';
+import { formatCardMask } from '../../utils/cardUtils';
 
 export function isMonobankStatement(headers: string[]): boolean {
   const normalized = headers.map(h => h.toLowerCase().trim());
@@ -87,7 +88,8 @@ export function mapMccToCategory(mcc?: number): { categoryId: string; subCategor
 
 export async function parseMonobankRows(
   rows: Record<string, any>[],
-  accountId = 'monobank_card'
+  accountId = 'monobank_black',
+  fallbackCardLast4 = '1234'
 ): Promise<Transaction[]> {
   const transactions: Transaction[] = [];
 
@@ -100,6 +102,7 @@ export async function parseMonobankRows(
     const descKey = keys.find(k => k.toLowerCase().includes('деталі') || k.toLowerCase().includes('опис')) || keys[1];
     const amountKey = keys.find(k => k.toLowerCase().includes('сума в валюті картки') || (k.toLowerCase().includes('сума') && !k.toLowerCase().includes('операції'))) || keys[3];
     const mccKey = keys.find(k => k.toLowerCase().includes('mcc'));
+    const cardKey = keys.find(k => k.toLowerCase().includes('картк') || k.toLowerCase().includes('card'));
 
     const rawDate = String(row[dateKey] || '').trim();
     if (!rawDate) continue;
@@ -116,6 +119,17 @@ export async function parseMonobankRows(
     const date = parseMonobankDate(rawDate);
     const mcc = mccKey && row[mccKey] ? parseInt(String(row[mccKey]).trim(), 10) : undefined;
     
+    // Detect card number from row or fallback
+    let cardLast4: string | undefined = fallbackCardLast4;
+    if (cardKey && row[cardKey]) {
+      const rawCardStr = String(row[cardKey]).trim();
+      const digitsMatch = rawCardStr.match(/(\d{4})$/) || rawCardStr.match(/(\d{4})/);
+      if (digitsMatch) {
+        cardLast4 = digitsMatch[1];
+      }
+    }
+    const cardNumberMasked = cardLast4 ? formatCardMask(cardLast4) : undefined;
+
     // Default category from MCC or Income
     let categoryId = rawAmount > 0 ? 'income_salary' : 'other';
     let subCategory: string | undefined;
@@ -143,6 +157,8 @@ export async function parseMonobankRows(
       mcc: isNaN(Number(mcc)) ? undefined : mcc,
       source: 'monobank',
       accountId,
+      cardLast4,
+      cardNumberMasked,
     });
   }
 

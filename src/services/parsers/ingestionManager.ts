@@ -39,7 +39,13 @@ export async function processStatementFile(file: File): Promise<ImportSummary> {
 
   if (isMonobankStatement(headers)) {
     detectedSource = 'monobank';
-    draftTransactions = await parseMonobankRows(rawRows);
+    const accounts = await db.accounts.toArray();
+    const defaultCardAcc = accounts.find(a => a.id === 'monobank_black' || a.type === 'bank_card');
+    draftTransactions = await parseMonobankRows(
+      rawRows,
+      defaultCardAcc?.id || 'monobank_black',
+      defaultCardAcc?.cardLast4 || '1234'
+    );
   } else if (isToshlStatement(headers)) {
     detectedSource = 'toshl';
     draftTransactions = await parseToshlRows(rawRows);

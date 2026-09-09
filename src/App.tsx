@@ -40,6 +40,7 @@ export const App: React.FC = () => {
   const budgets = useLiveQuery(() => db.budgets.toArray(), []);
   const rules = useLiveQuery(() => db.rules.toArray(), []);
   const exchangeRates = useLiveQuery(() => db.exchangeRates.toArray(), []);
+  const accounts = useLiveQuery(() => db.accounts.toArray(), []);
 
   // Theme effect
   useEffect(() => {
@@ -362,6 +363,7 @@ export const App: React.FC = () => {
           <TransactionsExplorer
             transactions={filteredTransactions}
             categories={categories || []}
+            accounts={accounts || []}
           />
         )}
 

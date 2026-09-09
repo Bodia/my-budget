@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { 
   Search, 
   Trash2, 
@@ -8,25 +9,38 @@ import {
   ArrowUpDown, 
   Check, 
   CheckSquare, 
-  Square 
+  Square,
+  CreditCard,
+  Edit2,
+  X,
+  AlertCircle
 } from 'lucide-react';
-import type { Transaction, Category } from '../../types/finance';
+import type { Transaction, Category, Account } from '../../types/finance';
 import { db } from '../../db/database';
 import { createRuleFromTransaction, applyRuleBackfill } from '../../services/rules/ruleEngine';
 import { formatUah } from '../../services/analytics/kpiCalculator';
+import { CardBadge } from '../cards/CardBadge';
+import { CardNumberInput } from '../cards/CardNumberInput';
+import { formatCardMask, isValidCardLast4 } from '../../utils/cardUtils';
 
 interface TransactionsExplorerProps {
   transactions: Transaction[];
   categories: Category[];
+  accounts?: Account[];
 }
 
 export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
   transactions,
   categories,
+  accounts: propAccounts,
 }) => {
+  const liveAccounts = useLiveQuery(() => db.accounts.toArray(), []);
+  const accounts = propAccounts && propAccounts.length > 0 ? propAccounts : (liveAccounts || []);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
   const [selectedSourceFilter, setSelectedSourceFilter] = useState<string>('all');
+  const [selectedCardFilter, setSelectedCardFilter] = useState<string>('all');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 30;
@@ -37,7 +51,19 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
     newCategoryId: string;
   } | null>(null);
 
+  // Card Assignment Modal State
+  const [cardModalState, setCardModalState] = useState<{
+    isOpen: boolean;
+    targets: Transaction[];
+    selectedAccountId: string;
+    customLast4: string;
+    applyToSimilar: boolean;
+    error?: string | null;
+  } | null>(null);
+
   const categoryMap = useMemo(() => new Map(categories.map(c => [c.id, c])), [categories]);
+  const accountMap = useMemo(() => new Map(accounts.map(a => [a.id, a])), [accounts]);
+  const cardAccounts = useMemo(() => accounts.filter(a => a.type === 'bank_card'), [accounts]);
 
   // Filter and sort transactions
   const filtered = useMemo(() => {
@@ -45,11 +71,17 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
 
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase().trim();
-      list = list.filter(t => 
-        t.description.toLowerCase().includes(term) ||
-        t.accountId.toLowerCase().includes(term) ||
-        (t.notes && t.notes.toLowerCase().includes(term))
-      );
+      list = list.filter(t => {
+        const accName = accountMap.get(t.accountId)?.name?.toLowerCase() || '';
+        return (
+          t.description.toLowerCase().includes(term) ||
+          t.accountId.toLowerCase().includes(term) ||
+          accName.includes(term) ||
+          (t.cardLast4 && t.cardLast4.includes(term)) ||
+          (t.cardNumberMasked && t.cardNumberMasked.toLowerCase().includes(term)) ||
+          (t.notes && t.notes.toLowerCase().includes(term))
+        );
+      });
     }
 
     if (selectedCategoryFilter !== 'all') {
@@ -60,6 +92,18 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
       list = list.filter(t => t.source === selectedSourceFilter);
     }
 
+    if (selectedCardFilter !== 'all') {
+      if (selectedCardFilter === 'none') {
+        list = list.filter(t => !t.cardLast4);
+      } else {
+        const targetAcc = accountMap.get(selectedCardFilter);
+        list = list.filter(t => 
+          t.accountId === selectedCardFilter || 
+          (targetAcc?.cardLast4 && t.cardLast4 === targetAcc.cardLast4)
+        );
+      }
+    }
+
     list.sort((a, b) => {
       const timeA = new Date(a.date).getTime();
       const timeB = new Date(b.date).getTime();
@@ -67,7 +111,7 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
     });
 
     return list;
-  }, [transactions, searchTerm, selectedCategoryFilter, selectedSourceFilter, sortOrder]);
+  }, [transactions, searchTerm, selectedCategoryFilter, selectedSourceFilter, selectedCardFilter, sortOrder, accountMap]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const paginated = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -106,6 +150,78 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
       await db.transactions.bulkDelete(Array.from(selectedIds));
       setSelectedIds(new Set());
     }
+  };
+
+  // Open Card Modal for a single transaction
+  const handleOpenSingleCardModal = (tx: Transaction) => {
+    setCardModalState({
+      isOpen: true,
+      targets: [tx],
+      selectedAccountId: tx.accountId || (cardAccounts[0]?.id || ''),
+      customLast4: tx.cardLast4 || '',
+      applyToSimilar: false,
+      error: null,
+    });
+  };
+
+  // Open Card Modal for batch selected transactions
+  const handleOpenBatchCardModal = () => {
+    const targets = transactions.filter(t => selectedIds.has(t.id));
+    if (targets.length === 0) return;
+
+    setCardModalState({
+      isOpen: true,
+      targets,
+      selectedAccountId: cardAccounts[0]?.id || '',
+      customLast4: '',
+      applyToSimilar: false,
+      error: null,
+    });
+  };
+
+  // Save Card Assignment
+  const handleSaveCardAssignment = async () => {
+    if (!cardModalState) return;
+
+    let targetLast4: string | undefined;
+    let targetAccountId = cardModalState.selectedAccountId;
+
+    if (targetAccountId === 'custom') {
+      const clean = cardModalState.customLast4.trim();
+      if (!isValidCardLast4(clean)) {
+        setCardModalState(prev => prev ? { ...prev, error: 'Введіть коректні 4 цифри картки' } : null);
+        return;
+      }
+      targetLast4 = clean;
+    } else if (targetAccountId === 'none') {
+      targetLast4 = undefined;
+      targetAccountId = 'cash';
+    } else {
+      const acc = accountMap.get(targetAccountId);
+      targetLast4 = acc?.cardLast4;
+    }
+
+    const masked = targetLast4 ? formatCardMask(targetLast4) : undefined;
+
+    let affectedIds = cardModalState.targets.map(t => t.id);
+
+    // Apply to similar if option checked for single transaction
+    if (cardModalState.targets.length === 1 && cardModalState.applyToSimilar) {
+      const desc = cardModalState.targets[0].description.toLowerCase().trim();
+      const similar = transactions.filter(t => t.description.toLowerCase().trim() === desc);
+      affectedIds = Array.from(new Set([...affectedIds, ...similar.map(s => s.id)]));
+    }
+
+    // Update transactions in database
+    await Promise.all(
+      affectedIds.map(id => db.transactions.update(id, {
+        accountId: targetAccountId === 'custom' ? (cardModalState.targets[0]?.accountId || 'bank_card') : targetAccountId,
+        cardLast4: targetLast4,
+        cardNumberMasked: masked,
+      }))
+    );
+
+    setCardModalState(null);
   };
 
   const toggleSelectAll = () => {
@@ -166,15 +282,32 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
             <input
               type="text"
               className="input"
-              placeholder="Пошук за описом, карткою чи нотатками..."
+              placeholder="Пошук за описом, карткою (4 цифри) чи нотатками..."
               value={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
               style={{ paddingLeft: 36 }}
             />
           </div>
 
+          {/* Card / Account Dropdown Filter */}
+          <div style={{ minWidth: 170 }}>
+            <select
+              className="select"
+              value={selectedCardFilter}
+              onChange={(e) => { setSelectedCardFilter(e.target.value); setCurrentPage(1); }}
+            >
+              <option value="all">Усі картки ({cardAccounts.length})</option>
+              {cardAccounts.map((acc) => (
+                <option key={acc.id} value={acc.id}>
+                  {acc.cardLast4 ? `•••• ${acc.cardLast4} (${acc.name})` : acc.name}
+                </option>
+              ))}
+              <option value="none">Без картки</option>
+            </select>
+          </div>
+
           {/* Category Dropdown Filter */}
-          <div style={{ minWidth: 200 }}>
+          <div style={{ minWidth: 180 }}>
             <select
               className="select"
               value={selectedCategoryFilter}
@@ -188,7 +321,7 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
           </div>
 
           {/* Source Filter */}
-          <div style={{ minWidth: 150 }}>
+          <div style={{ minWidth: 140 }}>
             <select
               className="select"
               value={selectedSourceFilter}
@@ -211,15 +344,26 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
             <span>{sortOrder === 'desc' ? 'Спочатку нові' : 'Спочатку старі'}</span>
           </button>
 
-          {/* Batch Delete Action */}
+          {/* Batch Actions */}
           {selectedIds.size > 0 && (
-            <button
-              onClick={handleDeleteSelected}
-              className="btn btn-danger btn-sm"
-            >
-              <Trash2 size={14} />
-              <span>Видалити ({selectedIds.size})</span>
-            </button>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button
+                onClick={handleOpenBatchCardModal}
+                className="btn btn-secondary btn-sm"
+                title="Призначити картку для обраних операцій"
+              >
+                <CreditCard size={14} />
+                <span>Призначити картку ({selectedIds.size})</span>
+              </button>
+
+              <button
+                onClick={handleDeleteSelected}
+                className="btn btn-danger btn-sm"
+              >
+                <Trash2 size={14} />
+                <span>Видалити ({selectedIds.size})</span>
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -241,6 +385,7 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
                 </th>
                 <th style={{ padding: '12px 16px', fontWeight: 600 }}>Дата</th>
                 <th style={{ padding: '12px 16px', fontWeight: 600 }}>Опис / Контрагент</th>
+                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Картка</th>
                 <th style={{ padding: '12px 16px', fontWeight: 600 }}>Категорія</th>
                 <th style={{ padding: '12px 16px', fontWeight: 600 }}>Джерело</th>
                 <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>Сума</th>
@@ -249,7 +394,7 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
             <tbody>
               {paginated.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ padding: 48, textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                  <td colSpan={7} style={{ padding: 48, textAlign: 'center', color: 'var(--text-tertiary)' }}>
                     Операцій не знайдено за вашим запитом
                   </td>
                 </tr>
@@ -257,6 +402,8 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
                 paginated.map((t) => {
                   const isSelected = selectedIds.has(t.id);
                   const isExpense = t.amount < 0;
+                  const account = accountMap.get(t.accountId);
+                  const effectiveLast4 = t.cardLast4 || account?.cardLast4;
 
                   return (
                     <tr
@@ -287,6 +434,42 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
                           </span>
                         )}
                       </td>
+
+                      {/* Card Column: Masked last 4 digits */}
+                      <td style={{ padding: '12px 16px' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenSingleCardModal(t)}
+                          className="btn btn-ghost btn-sm"
+                          style={{
+                            padding: '3px 8px',
+                            fontSize: 12,
+                            borderRadius: 'var(--radius-sm)',
+                            background: 'var(--bg-surface-hover)',
+                            border: '1px solid var(--border-default)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            cursor: 'pointer',
+                          }}
+                          title="Змінити картку або останні 4 цифри"
+                        >
+                          {effectiveLast4 ? (
+                            <CardBadge
+                              last4={effectiveLast4}
+                              color={account?.color}
+                              name={account?.name}
+                            />
+                          ) : (
+                            <span style={{ fontSize: 11, color: 'var(--text-tertiary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <CreditCard size={13} />
+                              <span>+ Вказати</span>
+                            </span>
+                          )}
+                          <Edit2 size={11} color="var(--text-tertiary)" style={{ marginLeft: 2 }} />
+                        </button>
+                      </td>
+
                       <td style={{ padding: '12px 16px' }}>
                         <select
                           className="select"
@@ -363,6 +546,202 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Card Assignment Modal */}
+      {cardModalState?.isOpen && (
+        <div className="modal-backdrop" onClick={() => setCardModalState(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            {/* Header */}
+            <div style={{
+              padding: '18px 24px',
+              borderBottom: '1px solid var(--border-default)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
+                  {cardModalState.targets.length > 1
+                    ? `Призначити картку (${cardModalState.targets.length} операцій)`
+                    : 'Призначення картки для транзакції'}
+                </h3>
+                {cardModalState.targets.length === 1 && (
+                  <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                    "{cardModalState.targets[0].description}"
+                  </p>
+                )}
+              </div>
+              <button onClick={() => setCardModalState(null)} className="btn btn-ghost btn-sm" style={{ padding: 4 }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
+              {cardModalState.error && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontSize: 12,
+                  color: 'var(--danger)',
+                  background: 'var(--danger-bg)',
+                  padding: '8px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                }}>
+                  <AlertCircle size={15} />
+                  <span>{cardModalState.error}</span>
+                </div>
+              )}
+
+              {/* Select saved card option */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  Оберіть збережену картку або рахунок:
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {cardAccounts.map((acc) => (
+                    <label
+                      key={acc.id}
+                      style={{
+                        padding: '10px 14px',
+                        borderRadius: 'var(--radius-sm)',
+                        border: `1.5px solid ${cardModalState.selectedAccountId === acc.id ? 'var(--primary)' : 'var(--border-default)'}`,
+                        background: cardModalState.selectedAccountId === acc.id ? 'var(--primary-bg)' : 'var(--bg-surface)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        cursor: 'pointer',
+                        transition: 'var(--transition)',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <input
+                          type="radio"
+                          name="targetAccount"
+                          value={acc.id}
+                          checked={cardModalState.selectedAccountId === acc.id}
+                          onChange={() => setCardModalState(prev => prev ? { ...prev, selectedAccountId: acc.id, error: null } : null)}
+                        />
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                          {acc.name}
+                        </span>
+                      </div>
+                      <CardBadge last4={acc.cardLast4} color={acc.color} />
+                    </label>
+                  ))}
+
+                  {/* Custom 4 digits option */}
+                  <label
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: `1.5px solid ${cardModalState.selectedAccountId === 'custom' ? 'var(--primary)' : 'var(--border-default)'}`,
+                      background: cardModalState.selectedAccountId === 'custom' ? 'var(--primary-bg)' : 'var(--bg-surface)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      cursor: 'pointer',
+                      transition: 'var(--transition)',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="targetAccount"
+                      value="custom"
+                      checked={cardModalState.selectedAccountId === 'custom'}
+                      onChange={() => setCardModalState(prev => prev ? { ...prev, selectedAccountId: 'custom', error: null } : null)}
+                    />
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                      Вказати інші 4 цифри вручну
+                    </span>
+                  </label>
+
+                  {/* None option */}
+                  <label
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: `1.5px solid ${cardModalState.selectedAccountId === 'none' ? 'var(--primary)' : 'var(--border-default)'}`,
+                      background: cardModalState.selectedAccountId === 'none' ? 'var(--primary-bg)' : 'var(--bg-surface)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      cursor: 'pointer',
+                      transition: 'var(--transition)',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="targetAccount"
+                      value="none"
+                      checked={cardModalState.selectedAccountId === 'none'}
+                      onChange={() => setCardModalState(prev => prev ? { ...prev, selectedAccountId: 'none', error: null } : null)}
+                    />
+                    <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                      Без картки (Готівка / зняти прив'язку)
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Masked Input when custom selected */}
+              {cardModalState.selectedAccountId === 'custom' && (
+                <div style={{
+                  padding: 14,
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'var(--bg-surface-hover)',
+                  border: '1px solid var(--border-default)',
+                  animation: 'fadeIn 0.2s ease',
+                }}>
+                  <CardNumberInput
+                    value={cardModalState.customLast4}
+                    onChange={(val) => setCardModalState(prev => prev ? { ...prev, customLast4: val, error: null } : null)}
+                    autoFocus
+                  />
+                </div>
+              )}
+
+              {/* Apply to similar checkbox (only for single transaction) */}
+              {cardModalState.targets.length === 1 && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={cardModalState.applyToSimilar}
+                    onChange={(e) => setCardModalState(prev => prev ? { ...prev, applyToSimilar: e.target.checked } : null)}
+                  />
+                  <span>
+                    Застосувати цю картку також до всіх однакових операцій з описом "{cardModalState.targets[0].description}"
+                  </span>
+                </label>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              padding: '16px 24px',
+              borderTop: '1px solid var(--border-default)',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: 10,
+            }}>
+              <button
+                onClick={() => setCardModalState(null)}
+                className="btn btn-secondary btn-sm"
+              >
+                Скасувати
+              </button>
+              <button
+                onClick={handleSaveCardAssignment}
+                className="btn btn-primary btn-sm"
+              >
+                <Check size={14} />
+                <span>Зберегти прив'язку</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

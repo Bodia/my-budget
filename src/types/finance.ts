@@ -15,6 +15,8 @@ export interface Transaction {
   mcc?: number;             // Merchant Category Code (from Monobank)
   source: 'monobank' | 'toshl' | 'generic' | 'manual';
   accountId: string;        // E.g. "Монобанка Чорна", "Toshl Wallet", "Готівка"
+  cardLast4?: string;       // Last 4 digits of the card e.g. "1234"
+  cardNumberMasked?: string;// Formatted masked card e.g. "**** **** **** 1234"
   notes?: string;           // Optional user notes
   isSubscription?: boolean; // Flagged by smart insight engine
 }
@@ -59,6 +61,9 @@ export interface Account {
   name: string;
   type: 'bank_card' | 'cash' | 'savings' | 'other';
   currency: CurrencyCode;
+  cardLast4?: string;       // Last 4 digits of the card e.g. "1234"
+  cardNumberMasked?: string;// Formatted masked card e.g. "**** **** **** 1234"
+  color?: string;           // Optional accent color for the card
 }
 
 export type InsightType = 'subscription' | 'spike' | 'latte_factor' | 'budget_50_30_20';

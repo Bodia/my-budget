@@ -85,3 +85,49 @@ describe('Rule Engine', () => {
     expect(evaluated.subCategory).toBe('Пальне');
   });
 });
+
+describe('Bank Card Masking & Utils', () => {
+  it('correctly sanitizes and validates 4 digits', async () => {
+    const { sanitizeCardLast4, isValidCardLast4, formatCardMask, formatCardCompact } = await import('../src/utils/cardUtils');
+
+    expect(sanitizeCardLast4('1234')).toBe('1234');
+    expect(sanitizeCardLast4('12a3b4c')).toBe('1234');
+    expect(sanitizeCardLast4('4441112223334821')).toBe('4441'); // first 4 digits if simple sanitization
+    expect(isValidCardLast4('4821')).toBe(true);
+    expect(isValidCardLast4('482')).toBe(false);
+    expect(isValidCardLast4('4821a')).toBe(false);
+
+    expect(formatCardMask('4821')).toBe('**** **** **** 4821');
+    expect(formatCardCompact('4821')).toBe('•••• 4821');
+  });
+
+  it('correctly parses card number or mask from Monobank statement rows', async () => {
+    const { parseMonobankRows } = await import('../src/services/parsers/monobankAdapter');
+
+    const sampleRows = [
+      {
+        'Дата і час': '01.03.2024 12:00:00',
+        'Опис': 'Сільпо',
+        'Сума': -250.00,
+        'Номер картки': '444111******9876',
+        'MCC': 5411,
+      },
+      {
+        'Дата і час': '02.03.2024 14:00:00',
+        'Опис': 'Кав’ярня',
+        'Сума': -60.00,
+        'MCC': 5814,
+      }
+    ];
+
+    const txs = await parseMonobankRows(sampleRows, 'monobank_black', '1234');
+    expect(txs.length).toBe(2);
+    expect(txs[0].cardLast4).toBe('9876');
+    expect(txs[0].cardNumberMasked).toBe('**** **** **** 9876');
+
+    // Second row falls back to account default
+    expect(txs[1].cardLast4).toBe('1234');
+    expect(txs[1].cardNumberMasked).toBe('**** **** **** 1234');
+  });
+});
+
