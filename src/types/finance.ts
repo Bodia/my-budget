@@ -24,6 +24,7 @@ export interface Transaction {
   mcc?: number;             // Merchant Category Code (from Monobank)
   source: 'monobank' | 'toshl' | 'generic' | 'manual';
   accountId: string;        // E.g. "Монобанка Чорна", "Toshl Wallet", "Готівка"
+  accountName?: string;     // Extracted or resolved account/card display name from document
   cardLast4?: string;       // Last 4 digits of the card e.g. "1234"
   cardNumberMasked?: string;// Formatted masked card e.g. "**** **** **** 1234"
   notes?: string;           // Optional user notes
@@ -103,6 +104,8 @@ export interface ImportSummary {
   duplicateRows: number;
   previewRows: Transaction[];
   draftTransactions: Transaction[];
+  detectedAccounts?: Account[]; // All accounts detected in document
+  newAccounts?: Account[];      // Accounts that will be newly created in DB
 }
 
 export interface DateFilterRange {

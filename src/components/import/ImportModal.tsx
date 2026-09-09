@@ -5,16 +5,19 @@ import {
   CheckCircle2, 
   AlertCircle, 
   ArrowRight, 
-  Loader2
+  Loader2,
+  CreditCard,
+  Sparkles
 } from 'lucide-react';
-import type { ImportSummary } from '../../types/finance';
+import type { ImportSummary, Account } from '../../types/finance';
 import { processStatementFile, commitImport } from '../../services/parsers/ingestionManager';
 import { formatUah } from '../../services/analytics/kpiCalculator';
+import { CardBadge } from '../cards/CardBadge';
 
 interface ImportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (count: number) => void;
+  onSuccess: (count: number, accountsCount?: number) => void;
 }
 
 export const ImportModal: React.FC<ImportModalProps> = ({
@@ -25,6 +28,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
+  const [editableNewAccounts, setEditableNewAccounts] = useState<Account[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -37,6 +41,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
     try {
       const res = await processStatementFile(file);
       setSummary(res);
+      setEditableNewAccounts(res.newAccounts || []);
     } catch (err: any) {
       setErrorMessage(err.message || 'Помилка при читанні файлу. Перевірте формат виписки.');
     } finally {
@@ -57,8 +62,17 @@ export const ImportModal: React.FC<ImportModalProps> = ({
       onClose();
       return;
     }
-    const count = await commitImport(summary.draftTransactions);
-    onSuccess(count);
+    const finalNewAccounts = editableNewAccounts;
+    const nameMap = new Map(finalNewAccounts.map(a => [a.id, a.name]));
+    const finalTransactions = summary.draftTransactions.map(tx => {
+      if (nameMap.has(tx.accountId)) {
+        return { ...tx, accountName: nameMap.get(tx.accountId) };
+      }
+      return tx;
+    });
+
+    const count = await commitImport(finalTransactions, finalNewAccounts);
+    onSuccess(count, finalNewAccounts.length);
     onClose();
   };
 
@@ -207,6 +221,127 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                   {summary.detectedSource === 'monobank' ? 'Виписка Monobank' : summary.detectedSource === 'toshl' ? 'Toshl Finance' : 'Універсальний'}
                 </span>
               </div>
+
+              {/* Detected Bank Cards / Accounts */}
+              {summary.detectedAccounts && summary.detectedAccounts.length > 0 && (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10,
+                  padding: 14,
+                  background: 'var(--bg-surface-hover)',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border-default)',
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: 'var(--text-secondary)',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <CreditCard size={15} style={{ color: 'var(--primary)' }} />
+                      <span>Виявлені картки та рахунки ({summary.detectedAccounts.length}):</span>
+                    </div>
+                    {editableNewAccounts.length > 0 && (
+                      <span style={{ fontSize: 11, color: 'var(--success)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <Sparkles size={13} />
+                        <span>+{editableNewAccounts.length} нових буде збережено</span>
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {summary.detectedAccounts.map((acc) => {
+                      const isNew = editableNewAccounts.some(na => na.id === acc.id);
+                      const currentAcc = editableNewAccounts.find(na => na.id === acc.id) || acc;
+
+                      return (
+                        <div
+                          key={acc.id}
+                          style={{
+                            padding: '10px 12px',
+                            borderRadius: 'var(--radius-sm)',
+                            background: isNew ? 'var(--primary-bg)' : 'var(--bg-surface)',
+                            border: isNew ? '1.5px solid var(--primary-border)' : '1px solid var(--border-subtle)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 12,
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                            <div style={{
+                              width: 30,
+                              height: 30,
+                              borderRadius: 'var(--radius-xs)',
+                              background: currentAcc.color || 'var(--primary)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: '#fff',
+                              flexShrink: 0,
+                              boxShadow: 'var(--shadow-sm)',
+                            }}>
+                              <CreditCard size={15} />
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
+                              {isNew ? (
+                                <input
+                                  type="text"
+                                  value={currentAcc.name}
+                                  onChange={(e) => {
+                                    const updated = editableNewAccounts.map(na =>
+                                      na.id === acc.id ? { ...na, name: e.target.value } : na
+                                    );
+                                    setEditableNewAccounts(updated);
+                                  }}
+                                  className="input"
+                                  style={{
+                                    padding: '3px 8px',
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    height: 28,
+                                    maxWidth: 220,
+                                  }}
+                                  title="Назва картки з документа (можна змінити)"
+                                />
+                              ) : (
+                                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                                  {currentAcc.name}
+                                </span>
+                              )}
+
+                              {currentAcc.cardLast4 ? (
+                                <CardBadge last4={currentAcc.cardLast4} color={currentAcc.color} />
+                              ) : null}
+
+                              <span className="badge badge-secondary" style={{ fontSize: 10 }}>
+                                {currentAcc.currency}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div>
+                            {isNew ? (
+                              <span className="badge badge-primary" style={{ fontSize: 11, padding: '2px 8px' }}>
+                                Нова картка (додасться)
+                              </span>
+                            ) : (
+                              <span className="badge badge-secondary" style={{ fontSize: 11, padding: '2px 8px' }}>
+                                Вже в системі
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Preview of first rows */}
               {summary.previewRows.length > 0 && (

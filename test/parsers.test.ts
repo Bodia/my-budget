@@ -3,7 +3,7 @@ import { parseMonobankDate, mapMccToCategory } from '../src/services/parsers/mon
 import { mapToshlCategory } from '../src/services/parsers/toshlAdapter';
 import { computeTransactionHash, deduplicateDrafts } from '../src/services/parsers/deduplication';
 import { matchRule, evaluateTransactionCategory } from '../src/services/rules/ruleEngine';
-import type { CategorizationRule, Transaction } from '../src/types/finance';
+import type { CategorizationRule, Transaction, Account } from '../src/types/finance';
 
 describe('Monobank Parser Adapter', () => {
   it('correctly parses Ukrainian date format DD.MM.YYYY HH:mm:ss', () => {
@@ -129,5 +129,89 @@ describe('Bank Card Masking & Utils', () => {
     expect(txs[1].cardLast4).toBe('1234');
     expect(txs[1].cardNumberMasked).toBe('**** **** **** 1234');
   });
+
+  it('extracts card name from columns and generates fallback Monobank *XXXX', async () => {
+    const { parseMonobankRows } = await import('../src/services/parsers/monobankAdapter');
+
+    const sampleRows = [
+      {
+        'Дата і час': '01.03.2024 12:00:00',
+        'Опис': 'Сільпо',
+        'Сума': -250.00,
+        'Номер картки': '444111******5555',
+        'Назва картки': 'єПідтримка Дія',
+      },
+      {
+        'Дата і час': '02.03.2024 14:00:00',
+        'Опис': 'Кав’ярня',
+        'Сума': -60.00,
+        'Номер картки': '5375 41** **** 7777',
+      }
+    ];
+
+    const txs = await parseMonobankRows(sampleRows, 'monobank_black', '1234');
+    expect(txs[0].cardLast4).toBe('5555');
+    expect(txs[0].accountName).toBe('єПідтримка Дія');
+
+    expect(txs[1].cardLast4).toBe('7777');
+    expect(txs[1].accountName).toBe('Monobank *7777');
+  });
+
+  it('automatically resolves and detects new cards vs existing cards during import', async () => {
+    const { resolveImportAccounts } = await import('../src/services/parsers/ingestionManager');
+    const existingAccounts: Account[] = [
+      { id: 'monobank_black', name: 'Monobank Чорна', type: 'bank_card', currency: 'UAH', cardLast4: '1234', cardNumberMasked: '**** **** **** 1234', color: '#1677ff' },
+      { id: 'cash', name: 'Готівка', type: 'cash', currency: 'UAH' },
+    ];
+
+    const drafts: Transaction[] = [
+      {
+        id: 't1',
+        hash: 'h1',
+        date: '2024-03-01T10:00:00',
+        amount: -100,
+        currency: 'UAH',
+        description: 'Сільпо',
+        categoryId: 'groceries',
+        source: 'monobank',
+        accountId: 'mono_1234',
+        cardLast4: '1234',
+        cardNumberMasked: '**** **** **** 1234',
+        accountName: 'Monobank *1234',
+      },
+      {
+        id: 't2',
+        hash: 'h2',
+        date: '2024-03-02T11:00:00',
+        amount: -250,
+        currency: 'UAH',
+        description: 'WOG',
+        categoryId: 'transport',
+        source: 'monobank',
+        accountId: 'mono_9999',
+        cardLast4: '9999',
+        cardNumberMasked: '**** **** **** 9999',
+        accountName: 'Біла картка зарплатна',
+      },
+    ];
+
+    const result = resolveImportAccounts(drafts, existingAccounts, 'monobank');
+
+    // First transaction should be mapped to existing account 'monobank_black'
+    expect(result.updatedDrafts[0].accountId).toBe('monobank_black');
+    expect(result.updatedDrafts[0].accountName).toBe('Monobank Чорна');
+
+    // Second transaction should have a brand-new account created
+    expect(result.newAccounts.length).toBe(1);
+    expect(result.newAccounts[0].cardLast4).toBe('9999');
+    expect(result.newAccounts[0].name).toBe('Біла картка зарплатна');
+    expect(result.newAccounts[0].type).toBe('bank_card');
+    expect(result.newAccounts[0].role).toBe('shared_family');
+    expect(result.updatedDrafts[1].accountId).toBe(result.newAccounts[0].id);
+
+    // Total detected accounts should be 2 (1 existing + 1 new)
+    expect(result.detectedAccounts.length).toBe(2);
+  });
 });
+
 

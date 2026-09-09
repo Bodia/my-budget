@@ -403,8 +403,12 @@ export const App: React.FC = () => {
       <ImportModal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
-        onSuccess={(count) => {
-          showToast(`Успішно імпортовано ${count} нових операцій!`);
+        onSuccess={(count, accountsCount) => {
+          if (accountsCount && accountsCount > 0) {
+            showToast(`Успішно імпортовано ${count} операцій та автоматично збережено ${accountsCount} нових карток!`);
+          } else {
+            showToast(`Успішно імпортовано ${count} нових операцій!`);
+          }
         }}
       />
     </div>

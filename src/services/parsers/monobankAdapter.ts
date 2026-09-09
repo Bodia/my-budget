@@ -1,6 +1,6 @@
 import type { Transaction } from '../../types/finance';
 import { computeTransactionHash } from './deduplication';
-import { formatCardMask } from '../../utils/cardUtils';
+import { formatCardMask, extractCardLast4, cleanCardName } from '../../utils/cardUtils';
 import { enrichTransaction } from '../intelligence/recognitionEngine';
 
 export function isMonobankStatement(headers: string[]): boolean {
@@ -104,7 +104,6 @@ export async function parseMonobankRows(
     const descKey = keys.find(k => k.toLowerCase().includes('деталі') || k.toLowerCase().includes('опис')) || keys[1];
     const amountKey = keys.find(k => k.toLowerCase().includes('сума в валюті картки') || (k.toLowerCase().includes('сума') && !k.toLowerCase().includes('операції'))) || keys[3];
     const mccKey = keys.find(k => k.toLowerCase().includes('mcc'));
-    const cardKey = keys.find(k => k.toLowerCase().includes('картк') || k.toLowerCase().includes('card'));
 
     const rawDate = String(row[dateKey] || '').trim();
     if (!rawDate) continue;
@@ -121,16 +120,56 @@ export async function parseMonobankRows(
     const date = parseMonobankDate(rawDate);
     const mcc = mccKey && row[mccKey] ? parseInt(String(row[mccKey]).trim(), 10) : undefined;
     
-    // Detect card number from row or fallback
-    let cardLast4: string | undefined = fallbackCardLast4;
-    if (cardKey && row[cardKey]) {
-      const rawCardStr = String(row[cardKey]).trim();
-      const digitsMatch = rawCardStr.match(/(\d{4})$/) || rawCardStr.match(/(\d{4})/);
-      if (digitsMatch) {
-        cardLast4 = digitsMatch[1];
-      }
+    // Detect card number and card name from row or fallback
+    const cardNumberKey = keys.find(k => {
+      const lk = k.toLowerCase();
+      return (lk.includes('номер') && (lk.includes('карт') || lk.includes('card'))) ||
+             lk === 'pan' || lk === 'card_number';
+    });
+    const cardNameKey = keys.find(k => {
+      const lk = k.toLowerCase();
+      return (lk.includes('назва') && (lk.includes('карт') || lk.includes('card'))) ||
+             (lk.includes('тип') && lk.includes('карт')) ||
+             lk === 'card_name';
+    });
+    const genericCardKey = keys.find(k => {
+      const lk = k.toLowerCase();
+      return (lk.includes('картк') || lk.includes('card') || lk.includes('карта')) && !lk.includes('сума') && !lk.includes('комісі');
+    });
+    const accountKey = keys.find(k => {
+      const lk = k.toLowerCase();
+      return (lk.includes('рахунок') && !lk.includes('залишок') && !lk.includes('сума')) || lk === 'account';
+    });
+
+    let cardLast4: string | undefined;
+    if (cardNumberKey && row[cardNumberKey]) {
+      cardLast4 = extractCardLast4(row[cardNumberKey]);
     }
+    if (!cardLast4 && genericCardKey && row[genericCardKey]) {
+      cardLast4 = extractCardLast4(row[genericCardKey]);
+    }
+    if (!cardLast4) {
+      cardLast4 = fallbackCardLast4;
+    }
+
     const cardNumberMasked = cardLast4 ? formatCardMask(cardLast4) : undefined;
+
+    // Detect card / account name
+    let accountName: string | undefined;
+    if (cardNameKey && row[cardNameKey] && String(row[cardNameKey]).trim()) {
+      accountName = cleanCardName(String(row[cardNameKey]), cardLast4, 'Monobank');
+    } else if (genericCardKey && row[genericCardKey] && String(row[genericCardKey]).trim()) {
+      const rawVal = String(row[genericCardKey]).trim();
+      if (!/^[\d\s*•\-_]+$/.test(rawVal)) {
+        accountName = cleanCardName(rawVal, cardLast4, 'Monobank');
+      }
+    } else if (accountKey && row[accountKey] && String(row[accountKey]).trim()) {
+      accountName = cleanCardName(String(row[accountKey]), cardLast4, 'Monobank');
+    }
+
+    if (!accountName) {
+      accountName = cardLast4 ? `Monobank *${cardLast4}` : 'Monobank Чорна';
+    }
 
     // Baseline category from MCC
     let categoryId = rawAmount > 0 ? 'income_salary' : 'other';
@@ -169,6 +208,7 @@ export async function parseMonobankRows(
       mcc: isNaN(Number(mcc)) ? undefined : mcc,
       source: 'monobank',
       accountId,
+      accountName,
       cardLast4,
       cardNumberMasked,
       transactionType: enriched.transactionType,

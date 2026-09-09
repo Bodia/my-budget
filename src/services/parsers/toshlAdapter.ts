@@ -1,7 +1,7 @@
 import type { Transaction } from '../../types/finance';
 import { computeTransactionHash } from './deduplication';
 import { enrichTransaction } from '../intelligence/recognitionEngine';
-import { formatCardMask } from '../../utils/cardUtils';
+import { formatCardMask, extractCardLast4, cleanCardName } from '../../utils/cardUtils';
 
 export function isToshlStatement(headers: string[]): boolean {
   const normalized = headers.map(h => h.toLowerCase().trim());
@@ -95,7 +95,7 @@ export async function parseToshlRows(
     // Account role and card profiling
     let accountRole: string | undefined;
     let accountId = rawAccount;
-    let cardLast4: string | undefined;
+    let cardLast4: string | undefined = extractCardLast4(rawAccount);
 
     const lowerAcc = rawAccount.toLowerCase();
     if (lowerAcc.includes('white') || lowerAcc.includes('біла')) {
@@ -104,13 +104,15 @@ export async function parseToshlRows(
     } else if (lowerAcc.includes('black') || lowerAcc.includes('чорна')) {
       accountRole = 'personal';
       accountId = 'monobank_black';
-      cardLast4 = '1234';
+      if (!cardLast4) cardLast4 = '1234';
     } else if (lowerAcc.includes('madeinukraine') || lowerAcc.includes('національний')) {
       accountRole = 'cashback_national';
       accountId = 'monobank_madeinukraine';
     } else if (lowerAcc.includes('cash') || lowerAcc.includes('готівка')) {
       accountId = 'cash';
     }
+
+    const accountName = cleanCardName(rawAccount, cardLast4, 'Рахунок');
 
     // Secondary tags from file
     const rowTags = tagsKey && row[tagsKey] 
@@ -145,6 +147,7 @@ export async function parseToshlRows(
       tags: mergedTags.length > 0 ? mergedTags : undefined,
       source: 'toshl',
       accountId,
+      accountName,
       cardLast4,
       cardNumberMasked: cardLast4 ? formatCardMask(cardLast4) : undefined,
       transactionType: enriched.transactionType,
