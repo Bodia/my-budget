@@ -474,12 +474,13 @@ export function matchMerchant(description: string, amount: number): EnrichedInte
   }
 
   if (lower.includes('з чорної картки') || lower.includes('з білої картки') || lower.includes('переказ на картку')) {
+    const isNamedContact = /[А-ЯІЇЄ][а-яіїє]+\s+[А-ЯІЇЄ]\.?|мамуся|тато|сестра|брат|анастасія/i.test(cleanedDesc);
     return {
       transactionType: 'transfer',
-      cleanMerchant: 'Міжкарточний переказ',
+      cleanMerchant: isNamedContact ? cleanedDesc.replace(/переказ\s+(на\s+картку\s+)?/i, 'Переказ: ').trim() : 'Міжкарточний переказ',
       categoryId: 'other',
       subCategory: 'Перекази',
-      tags: ['transfer', 'p2p'],
+      tags: isNamedContact ? ['transfer', 'p2p', 'p2p_contact', 'p2p_family'] : ['transfer', 'p2p'],
       isSavings: false,
     };
   }
@@ -514,3 +515,20 @@ export function matchMerchant(description: string, amount: number): EnrichedInte
 
   return null;
 }
+
+export function cleanMerchantName(description: string): string {
+  const match = matchMerchant(description, -100);
+  if (match?.cleanMerchant) return match.cleanMerchant;
+  return cleanGatewayPrefixes(description);
+}
+
+export function matchUkrainianMerchant(description: string) {
+  const match = matchMerchant(description, -100);
+  if (!match) return null;
+  return {
+    cleanName: match.cleanMerchant,
+    suggestedCategory: match.categoryId,
+    tags: match.tags ?? [],
+  };
+}
+

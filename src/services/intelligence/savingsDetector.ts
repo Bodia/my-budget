@@ -78,3 +78,13 @@ export function detectSavings(description: string, amount: number): EnrichedInte
 
   return null;
 }
+
+export function detectSavingsTransaction(description: string, amount: number) {
+  const res = detectSavings(description, amount);
+  return {
+    isSavings: res?.isSavings ?? false,
+    ruleName: res?.tags?.includes('rounding') ? 'monobank_rounding' : (res?.tags?.includes('whims') ? 'monobank_whims' : undefined),
+    tags: res?.tags?.map(t => t === 'whims' ? 'savings_whims' : (t === 'withdrawal' ? 'jar_withdrawal' : t)) ?? [],
+    cleanMerchant: res?.cleanMerchant,
+  };
+}

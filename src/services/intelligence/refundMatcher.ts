@@ -58,3 +58,14 @@ export function detectRefund(description: string, amount: number): EnrichedIntel
 
   return null;
 }
+
+export function isRefundOrCancellation(description: string, amount: number) {
+  const res = detectRefund(description, amount);
+  const match = description.match(/^скасування[.:]\s*(.+)/i);
+  return {
+    isRefund: res?.transactionType === 'refund',
+    originalQuery: match ? match[1].trim() : undefined,
+    tags: res?.tags ?? [],
+  };
+}
+

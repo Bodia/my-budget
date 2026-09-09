@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Heart, ExternalLink, Award } from 'lucide-react';
+import { Shield, Heart, Award } from 'lucide-react';
 import type { Transaction } from '../../types/finance';
 import { formatUah } from '../../services/analytics/kpiCalculator';
 
