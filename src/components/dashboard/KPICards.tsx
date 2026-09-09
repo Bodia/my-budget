@@ -161,6 +161,44 @@ export const KPICards: React.FC<KPICardsProps> = ({ kpi }) => {
           <span>{kpi.transactionCount} операцій у вибірці</span>
         </div>
       </div>
+
+      {/* 5. Monobank Jars Savings Card */}
+      <div className="ant-card" style={{ padding: '20px 24px', position: 'relative' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
+            Заощаджено у Банках (Jar Savings)
+          </span>
+          <div style={{
+            width: 34,
+            height: 34,
+            borderRadius: 'var(--radius-sm)',
+            background: 'rgba(99, 102, 241, 0.12)',
+            color: '#6366f1',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <PiggyBank size={18} />
+          </div>
+        </div>
+        <div className="tabular-nums" style={{
+          fontSize: 28,
+          fontWeight: 700,
+          fontFamily: 'var(--font-display)',
+          color: 'var(--text-primary)',
+          letterSpacing: '-0.02em',
+          marginBottom: 8,
+        }}>
+          {formatUah(kpi.totalSavedInJars)}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
+          <span className="badge badge-primary" style={{ fontSize: 11, background: 'rgba(99, 102, 241, 0.15)', color: '#6366f1' }}>
+            {kpi.jarSavingsRate}%
+          </span>
+          <span>округлення, «На примхи» та депозити</span>
+        </div>
+      </div>
     </div>
   );
 };
+

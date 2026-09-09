@@ -44,7 +44,8 @@ export async function processStatementFile(file: File): Promise<ImportSummary> {
     draftTransactions = await parseMonobankRows(
       rawRows,
       defaultCardAcc?.id || 'monobank_black',
-      defaultCardAcc?.cardLast4 || '1234'
+      defaultCardAcc?.cardLast4 || '1234',
+      defaultCardAcc?.role || 'personal'
     );
   } else if (isToshlStatement(headers)) {
     detectedSource = 'toshl';

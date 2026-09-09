@@ -1,5 +1,12 @@
 export type CurrencyCode = 'UAH' | 'USD' | 'EUR' | string;
 
+export type TransactionType = 
+  | 'expense'       // Regular consumer living expense
+  | 'income'        // Income (FOP, salary, cashback)
+  | 'savings_jar'   // Savings in bank jars (rounding, whims %, deposits)
+  | 'transfer'      // Internal transfer between own cards / ATM
+  | 'refund';       // Refund / cancellation (Bolt, merchant refunds)
+
 export interface Transaction {
   id: string;               // UUID or deterministic hash
   hash: string;             // sha256 of normalized fields for deduplication
@@ -9,9 +16,11 @@ export interface Transaction {
   originalAmount?: number;  // If foreign transaction
   originalCurrency?: string;
   description: string;      // Merchant / clean transaction text
+  cleanMerchant?: string;   // Normalized brand name (e.g. "Ehrle (Автомийка)", "Сільпо")
   originalCategory?: string;// Category reported by Monobank or Toshl
   categoryId: string;       // Normalized category ID in the system
   subCategory?: string;     // Optional subcategory (e.g. "Пальне", "Кава")
+  tags?: string[];          // Second-level classification tags: e.g. ["groceries"], ["medicine"], ["zsu"]
   mcc?: number;             // Merchant Category Code (from Monobank)
   source: 'monobank' | 'toshl' | 'generic' | 'manual';
   accountId: string;        // E.g. "Монобанка Чорна", "Toshl Wallet", "Готівка"
@@ -19,6 +28,9 @@ export interface Transaction {
   cardNumberMasked?: string;// Formatted masked card e.g. "**** **** **** 1234"
   notes?: string;           // Optional user notes
   isSubscription?: boolean; // Flagged by smart insight engine
+  transactionType?: TransactionType; // Functional type of transaction
+  isSavings?: boolean;      // Flag indicating this is a jar/deposit savings transaction
+  linkedTransactionId?: string; // Paired transaction ID for refunds or ATM transfers
 }
 
 export interface Category {
@@ -64,6 +76,7 @@ export interface Account {
   cardLast4?: string;       // Last 4 digits of the card e.g. "1234"
   cardNumberMasked?: string;// Formatted masked card e.g. "**** **** **** 1234"
   color?: string;           // Optional accent color for the card
+  role?: 'shared_family' | 'personal' | 'cashback_national' | 'general'; // Contextual account role
 }
 
 export type InsightType = 'subscription' | 'spike' | 'latte_factor' | 'budget_50_30_20';

@@ -4,11 +4,13 @@ import {
   Upload, 
   Trash2, 
   Save, 
-  Check 
+  Check,
+  Sparkles 
 } from 'lucide-react';
 import type { Category, Budget, CategorizationRule } from '../../types/finance';
 import { db } from '../../db/database';
 import { CardsManager } from './CardsManager';
+import { reclassifyAllTransactions } from '../../services/intelligence/recognitionEngine';
 
 interface DataManagementModalProps {
   categories: Category[];
@@ -27,6 +29,20 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
     Object.fromEntries(budgets.map(b => [b.categoryId, b.monthlyLimit]))
   );
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isReclassifying, setIsReclassifying] = useState(false);
+
+  const handleReclassify = async () => {
+    setIsReclassifying(true);
+    try {
+      const updated = await reclassifyAllTransactions();
+      alert(`Інтелектуальне розпізнавання завершено! Оновлено ${updated} транзакцій (чисті бренди, банки накопичення, повернення, теги).`);
+      onReload();
+    } catch (err: any) {
+      alert('Помилка розпізнавання: ' + err.message);
+    } finally {
+      setIsReclassifying(false);
+    }
+  };
 
   // Backup Export
   const handleExportBackup = async () => {
@@ -141,6 +157,16 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
             <span>Відновити з бекапу</span>
             <input type="file" accept=".json" onChange={handleImportBackup} style={{ display: 'none' }} />
           </label>
+
+          <button 
+            onClick={handleReclassify} 
+            disabled={isReclassifying} 
+            className="btn btn-secondary btn-sm"
+            title="Повторно розпізнати банки накопичення, повернення, теги та очистити назви українських брендів"
+          >
+            <Sparkles size={15} color="var(--primary)" />
+            <span>{isReclassifying ? 'Оновлення...' : 'Перерозпізнати транзакції'}</span>
+          </button>
 
           <button onClick={handleClearDatabase} className="btn btn-danger btn-sm" style={{ marginLeft: 'auto' }}>
             <Trash2 size={15} />

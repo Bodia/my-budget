@@ -38,6 +38,7 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
   const accounts = propAccounts && propAccounts.length > 0 ? propAccounts : (liveAccounts || []);
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('all');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
   const [selectedSourceFilter, setSelectedSourceFilter] = useState<string>('all');
   const [selectedCardFilter, setSelectedCardFilter] = useState<string>('all');
@@ -73,8 +74,12 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
       const term = searchTerm.toLowerCase().trim();
       list = list.filter(t => {
         const accName = accountMap.get(t.accountId)?.name?.toLowerCase() || '';
+        const tagsStr = (t.tags || []).join(' ').toLowerCase();
+        const cleanMerch = (t.cleanMerchant || '').toLowerCase();
         return (
           t.description.toLowerCase().includes(term) ||
+          cleanMerch.includes(term) ||
+          tagsStr.includes(term) ||
           t.accountId.toLowerCase().includes(term) ||
           accName.includes(term) ||
           (t.cardLast4 && t.cardLast4.includes(term)) ||
@@ -82,6 +87,20 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
           (t.notes && t.notes.toLowerCase().includes(term))
         );
       });
+    }
+
+    if (selectedTypeFilter !== 'all') {
+      if (selectedTypeFilter === 'living_expenses') {
+        list = list.filter(t => !t.isSavings && t.amount < 0 && t.transactionType !== 'refund' && t.transactionType !== 'transfer');
+      } else if (selectedTypeFilter === 'savings') {
+        list = list.filter(t => t.isSavings || t.transactionType === 'savings_jar');
+      } else if (selectedTypeFilter === 'refunds') {
+        list = list.filter(t => t.transactionType === 'refund' || (t.amount > 0 && /скасування|повернення|refund/i.test(t.description)));
+      } else if (selectedTypeFilter === 'transfers') {
+        list = list.filter(t => t.transactionType === 'transfer');
+      } else if (selectedTypeFilter === 'charity') {
+        list = list.filter(t => t.tags?.includes('zsu') || t.tags?.includes('charity') || t.categoryId === 'charity');
+      }
     }
 
     if (selectedCategoryFilter !== 'all') {
@@ -111,7 +130,7 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
     });
 
     return list;
-  }, [transactions, searchTerm, selectedCategoryFilter, selectedSourceFilter, selectedCardFilter, sortOrder, accountMap]);
+  }, [transactions, searchTerm, selectedTypeFilter, selectedCategoryFilter, selectedSourceFilter, selectedCardFilter, sortOrder, accountMap]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const paginated = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -320,6 +339,22 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
             </select>
           </div>
 
+          {/* Type / Nature Filter */}
+          <div style={{ minWidth: 175 }}>
+            <select
+              className="select"
+              value={selectedTypeFilter}
+              onChange={(e) => { setSelectedTypeFilter(e.target.value); setCurrentPage(1); }}
+            >
+              <option value="all">Усі типи операцій</option>
+              <option value="living_expenses">🛒 Витрати на життя</option>
+              <option value="savings">🏺 Накопичення (Банки)</option>
+              <option value="refunds">↩️ Повернення коштів</option>
+              <option value="transfers">🔄 Перекази між картками</option>
+              <option value="charity">🇺🇦 ЗСУ та благодійність</option>
+            </select>
+          </div>
+
           {/* Source Filter */}
           <div style={{ minWidth: 140 }}>
             <select
@@ -404,6 +439,7 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
                   const isExpense = t.amount < 0;
                   const account = accountMap.get(t.accountId);
                   const effectiveLast4 = t.cardLast4 || account?.cardLast4;
+                  const isZsu = t.tags?.includes('zsu') || /ахіллес|повернись живим|притула|uanimals|drone|зсу/i.test(t.description);
 
                   return (
                     <tr
@@ -427,12 +463,68 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
                         {t.date.replace('T', ' ').slice(0, 16)}
                       </td>
                       <td style={{ padding: '12px 16px', fontWeight: 500, color: 'var(--text-primary)' }}>
-                        <div>{t.description}</div>
-                        {t.mcc && (
-                          <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-                            MCC: {t.mcc} {t.subCategory ? `• ${t.subCategory}` : ''}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                            {t.cleanMerchant || t.description}
                           </span>
+
+                          {/* Type Badges */}
+                          {(t.isSavings || t.transactionType === 'savings_jar') && (
+                            <span className="badge" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#6366f1', fontSize: 10, padding: '1px 5px' }}>
+                              🏺 Банка
+                            </span>
+                          )}
+                          {t.transactionType === 'refund' && (
+                            <span className="badge badge-success" style={{ fontSize: 10, padding: '1px 5px' }}>
+                              ↩️ Повернення
+                            </span>
+                          )}
+                          {t.transactionType === 'transfer' && (
+                            <span className="badge" style={{ background: 'rgba(148, 163, 184, 0.15)', color: 'var(--text-secondary)', fontSize: 10, padding: '1px 5px' }}>
+                              🔄 Переказ
+                            </span>
+                          )}
+                          {isZsu && (
+                            <span className="badge" style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#0284c7', fontSize: 10, padding: '1px 5px' }}>
+                              🇺🇦 ЗСУ
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Original description subtitle if cleaned */}
+                        {t.cleanMerchant && t.cleanMerchant !== t.description && (
+                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2, maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {t.description}
+                          </div>
                         )}
+
+                        {/* SubCategory and Tags */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                          {t.mcc && (
+                            <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                              MCC: {t.mcc} {t.subCategory ? `• ${t.subCategory}` : ''}
+                            </span>
+                          )}
+                          {t.tags && t.tags.length > 0 && (
+                            <div style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
+                              {t.tags.map(tag => (
+                                <span
+                                  key={tag}
+                                  style={{
+                                    fontSize: 10,
+                                    padding: '1px 5px',
+                                    borderRadius: 4,
+                                    background: 'var(--bg-surface-hover)',
+                                    border: '1px solid var(--border-subtle)',
+                                    color: 'var(--text-secondary)',
+                                  }}
+                                >
+                                  #{tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </td>
 
                       {/* Card Column: Masked last 4 digits */}

@@ -1,6 +1,7 @@
 import type { Transaction } from '../../types/finance';
 import { computeTransactionHash } from './deduplication';
 import { formatCardMask } from '../../utils/cardUtils';
+import { enrichTransaction } from '../intelligence/recognitionEngine';
 
 export function isMonobankStatement(headers: string[]): boolean {
   const normalized = headers.map(h => h.toLowerCase().trim());
@@ -89,7 +90,8 @@ export function mapMccToCategory(mcc?: number): { categoryId: string; subCategor
 export async function parseMonobankRows(
   rows: Record<string, any>[],
   accountId = 'monobank_black',
-  fallbackCardLast4 = '1234'
+  fallbackCardLast4 = '1234',
+  accountRole?: string
 ): Promise<Transaction[]> {
   const transactions: Transaction[] = [];
 
@@ -130,7 +132,7 @@ export async function parseMonobankRows(
     }
     const cardNumberMasked = cardLast4 ? formatCardMask(cardLast4) : undefined;
 
-    // Default category from MCC or Income
+    // Baseline category from MCC
     let categoryId = rawAmount > 0 ? 'income_salary' : 'other';
     let subCategory: string | undefined;
 
@@ -142,6 +144,14 @@ export async function parseMonobankRows(
       }
     }
 
+    // Apply Intelligence Engine enrichment
+    const enriched = enrichTransaction({
+      description: rawDesc,
+      amount: rawAmount,
+      categoryId,
+      subCategory,
+    }, accountRole);
+
     const hash = await computeTransactionHash(date, rawAmount, rawDesc, accountId);
 
     transactions.push({
@@ -151,16 +161,22 @@ export async function parseMonobankRows(
       amount: rawAmount,
       currency: 'UAH',
       description: rawDesc,
+      cleanMerchant: enriched.cleanMerchant || rawDesc,
       originalCategory: mcc ? `MCC ${mcc}` : undefined,
-      categoryId,
-      subCategory,
+      categoryId: enriched.categoryId || categoryId,
+      subCategory: enriched.subCategory || subCategory,
+      tags: enriched.tags,
       mcc: isNaN(Number(mcc)) ? undefined : mcc,
       source: 'monobank',
       accountId,
       cardLast4,
       cardNumberMasked,
+      transactionType: enriched.transactionType,
+      isSavings: Boolean(enriched.isSavings),
+      isSubscription: enriched.isSubscription,
     });
   }
 
   return transactions;
 }
+

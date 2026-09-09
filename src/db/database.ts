@@ -216,14 +216,39 @@ class PersonalFinanceDB extends Dexie {
       }
     });
 
+    this.version(3).stores({
+      transactions: 'id, hash, date, categoryId, source, accountId, cardLast4, transactionType, isSavings',
+      accounts: 'id, cardLast4, role',
+    }).upgrade(async (tx) => {
+      const txTable = tx.table('transactions');
+      const all = await txTable.toArray();
+      for (const t of all) {
+        if (!t.transactionType) {
+          const isSav = t.description && (
+            t.description.includes('Округлення балансу') || 
+            t.description.includes('На примхи') ||
+            t.description.includes('Поповнення «') ||
+            t.description.includes('Часткове зняття банки')
+          );
+          const isRef = t.description && (t.description.includes('Скасування.') || t.description.includes('Повернення'));
+          const type = isSav ? 'savings_jar' : isRef ? 'refund' : (t.amount > 0 ? 'income' : 'expense');
+          await txTable.update(t.id, {
+            transactionType: type,
+            isSavings: Boolean(isSav),
+          });
+        }
+      }
+    });
+
     this.on('populate', () => {
       this.categories.bulkAdd(DEFAULT_CATEGORIES);
       this.budgets.bulkAdd(DEFAULT_BUDGETS);
       this.rules.bulkAdd(DEFAULT_RULES);
       this.exchangeRates.bulkAdd(DEFAULT_EXCHANGE_RATES);
       this.accounts.bulkAdd([
-        { id: 'monobank_black', name: 'Monobank Чорна', type: 'bank_card', currency: 'UAH', cardLast4: '1234', cardNumberMasked: '**** **** **** 1234', color: '#1677ff' },
-        { id: 'cash', name: 'Готівка', type: 'cash', currency: 'UAH' },
+        { id: 'monobank_black', name: 'Monobank Чорна', type: 'bank_card', currency: 'UAH', cardLast4: '1234', cardNumberMasked: '**** **** **** 1234', color: '#1677ff', role: 'personal' },
+        { id: 'monobank_white', name: 'Monobank Біла', type: 'bank_card', currency: 'UAH', color: '#52c41a', role: 'shared_family' },
+        { id: 'cash', name: 'Готівка', type: 'cash', currency: 'UAH', role: 'general' },
       ]);
     });
   }

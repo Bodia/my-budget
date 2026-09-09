@@ -7,7 +7,8 @@ import {
   calculateKPIs, 
   calculateCategoryBreakdown, 
   calculateMonthlyCashflow, 
-  calculateTopMerchants 
+  calculateTopMerchants,
+  calculateUtilitiesStatus
 } from './services/analytics/kpiCalculator';
 import { analyzeSavingsOpportunities } from './services/analytics/smartSavings';
 
@@ -17,6 +18,8 @@ import { CategoryDonutChart } from './components/dashboard/CategoryDonutChart';
 import { CashflowChart } from './components/dashboard/CashflowChart';
 import { TopMerchantsChart } from './components/dashboard/TopMerchantsChart';
 import { BudgetProgressList } from './components/dashboard/BudgetProgressList';
+import { CharityZSUWidget } from './components/dashboard/CharityZSUWidget';
+import { UtilitiesChecklistWidget } from './components/dashboard/UtilitiesChecklistWidget';
 import { SmartSavingsView } from './components/insights/SmartSavingsView';
 import { HeatmapCalendar } from './components/analytics/HeatmapCalendar';
 import { TransactionsExplorer } from './components/transactions/TransactionsExplorer';
@@ -111,6 +114,10 @@ export const App: React.FC = () => {
 
   const topMerchants = useMemo(() => {
     return calculateTopMerchants(filteredTransactions, 8);
+  }, [filteredTransactions]);
+
+  const utilitiesStatus = useMemo(() => {
+    return calculateUtilitiesStatus(filteredTransactions);
   }, [filteredTransactions]);
 
   const savingsInsights = useMemo(() => {
@@ -294,6 +301,20 @@ export const App: React.FC = () => {
                 onOpenSettings={() => setActiveTab('settings')}
               />
               <TopMerchantsChart merchants={topMerchants} />
+            </div>
+
+            {/* Ukrainian Intelligence Row: Charity / Armed Forces Aid & Utilities Checklist */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
+              gap: 20,
+            }}>
+              <CharityZSUWidget
+                transactions={filteredTransactions}
+                totalDonations={kpi.totalDonationsZSU}
+                totalIncome={kpi.totalIncome}
+              />
+              <UtilitiesChecklistWidget utilities={utilitiesStatus} />
             </div>
           </div>
         )}

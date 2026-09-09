@@ -1,5 +1,7 @@
 import type { Transaction } from '../../types/finance';
 import { computeTransactionHash } from './deduplication';
+import { enrichTransaction } from '../intelligence/recognitionEngine';
+import { formatCardMask } from '../../utils/cardUtils';
 
 export function isToshlStatement(headers: string[]): boolean {
   const normalized = headers.map(h => h.toLowerCase().trim());
@@ -55,8 +57,9 @@ export async function parseToshlRows(
     const keys = Object.keys(row);
 
     const dateKey = keys.find(k => k.toLowerCase() === 'date') || keys[0];
-    const descKey = keys.find(k => k.toLowerCase() === 'description' || k.toLowerCase() === 'tags') || keys[1];
+    const descKey = keys.find(k => k.toLowerCase() === 'description') || keys[1];
     const categoryKey = keys.find(k => k.toLowerCase() === 'category');
+    const tagsKey = keys.find(k => k.toLowerCase() === 'tags');
     const expenseKey = keys.find(k => k.toLowerCase().includes('expense amount') || k.toLowerCase() === 'expense');
     const incomeKey = keys.find(k => k.toLowerCase().includes('income amount') || k.toLowerCase() === 'income');
     const amountKey = keys.find(k => k.toLowerCase() === 'amount');
@@ -73,23 +76,59 @@ export async function parseToshlRows(
 
     let amount = 0;
     if (expenseKey && row[expenseKey] !== undefined && row[expenseKey] !== '') {
-      const exp = parseFloat(String(row[expenseKey]).replace(',', '.'));
+      const exp = parseFloat(String(row[expenseKey]).replace(/\s/g, '').replace(',', '.'));
       if (!isNaN(exp) && exp > 0) amount = -exp;
     } else if (incomeKey && row[incomeKey] !== undefined && row[incomeKey] !== '') {
-      const inc = parseFloat(String(row[incomeKey]).replace(',', '.'));
+      const inc = parseFloat(String(row[incomeKey]).replace(/\s/g, '').replace(',', '.'));
       if (!isNaN(inc) && inc > 0) amount = inc;
     } else if (amountKey && row[amountKey] !== undefined) {
-      amount = parseFloat(String(row[amountKey]).replace(',', '.'));
+      amount = parseFloat(String(row[amountKey]).replace(/\s/g, '').replace(',', '.'));
     }
 
     if (isNaN(amount) || amount === 0) continue;
 
     const rawCategory = categoryKey ? String(row[categoryKey] || 'Other').trim() : 'Other';
     const rawDesc = descKey ? String(row[descKey] || rawCategory).trim() : rawCategory;
-    const accountId = accountKey && row[accountKey] ? String(row[accountKey]).trim() : 'toshl_account';
+    const rawAccount = accountKey && row[accountKey] ? String(row[accountKey]).trim() : 'toshl_account';
     const currency = currencyKey && row[currencyKey] ? String(row[currencyKey]).trim().toUpperCase() : 'UAH';
 
+    // Account role and card profiling
+    let accountRole: string | undefined;
+    let accountId = rawAccount;
+    let cardLast4: string | undefined;
+
+    const lowerAcc = rawAccount.toLowerCase();
+    if (lowerAcc.includes('white') || lowerAcc.includes('біла')) {
+      accountRole = 'shared_family';
+      accountId = 'monobank_white';
+    } else if (lowerAcc.includes('black') || lowerAcc.includes('чорна')) {
+      accountRole = 'personal';
+      accountId = 'monobank_black';
+      cardLast4 = '1234';
+    } else if (lowerAcc.includes('madeinukraine') || lowerAcc.includes('національний')) {
+      accountRole = 'cashback_national';
+      accountId = 'monobank_madeinukraine';
+    } else if (lowerAcc.includes('cash') || lowerAcc.includes('готівка')) {
+      accountId = 'cash';
+    }
+
+    // Secondary tags from file
+    const rowTags = tagsKey && row[tagsKey] 
+      ? String(row[tagsKey]).split(',').map(s => s.trim()).filter(Boolean) 
+      : [];
+
     const mapped = mapToshlCategory(rawCategory);
+
+    // Intelligence Engine enrichment
+    const enriched = enrichTransaction({
+      description: rawDesc,
+      amount,
+      categoryId: amount > 0 ? 'income_salary' : mapped.categoryId,
+      subCategory: mapped.subCategory,
+    }, accountRole);
+
+    const mergedTags = Array.from(new Set([...rowTags, ...(enriched.tags || [])]));
+
     const hash = await computeTransactionHash(date, amount, rawDesc, accountId);
 
     transactions.push({
@@ -99,13 +138,21 @@ export async function parseToshlRows(
       amount,
       currency,
       description: rawDesc,
+      cleanMerchant: enriched.cleanMerchant || rawDesc,
       originalCategory: rawCategory,
-      categoryId: amount > 0 ? 'income_salary' : mapped.categoryId,
-      subCategory: mapped.subCategory,
+      categoryId: enriched.categoryId || mapped.categoryId,
+      subCategory: enriched.subCategory || mapped.subCategory,
+      tags: mergedTags.length > 0 ? mergedTags : undefined,
       source: 'toshl',
       accountId,
+      cardLast4,
+      cardNumberMasked: cardLast4 ? formatCardMask(cardLast4) : undefined,
+      transactionType: enriched.transactionType,
+      isSavings: Boolean(enriched.isSavings),
+      isSubscription: enriched.isSubscription,
     });
   }
 
   return transactions;
 }
+
