@@ -21,7 +21,7 @@ export const CardNumberInput: React.FC<CardNumberInputProps> = ({
     const raw = e.target.value;
     // Extract only digits; if pasted full card number (e.g. 16 digits), take the last 4
     const cleanDigits = raw.replace(/\D/g, '');
-    const last4 = cleanDigits.length > 4 ? cleanDigits.slice(-4) : cleanDigits.slice(0, 4);
+    const last4 = sanitizeCardLast4(cleanDigits.length > 4 ? cleanDigits.slice(-4) : cleanDigits);
     onChange(last4);
   };
 
