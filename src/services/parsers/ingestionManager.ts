@@ -3,6 +3,7 @@ import Papa from 'papaparse';
 import type { ImportSummary, Transaction, Account } from '../../types/finance';
 import { db } from '../../db/database';
 import { isMonobankStatement, parseMonobankRows } from './monobankAdapter';
+import { isMonoBudgetStatement, parseMonoBudgetRows } from './monoBudgetAdapter';
 import { isToshlStatement, parseToshlRows } from './toshlAdapter';
 import { deduplicateDrafts } from './deduplication';
 import { cleanCardName, formatCardMask } from '../../utils/cardUtils';
@@ -20,6 +21,9 @@ const ACCOUNT_COLORS = [
 
 function inferAccountRole(name: string): Account['role'] {
   const lower = name.toLowerCase();
+  if (lower.includes('фоп') || lower.includes('fop') || lower.includes('бізнес') || lower.includes('business')) {
+    return 'business';
+  }
   if (lower.includes('біла') || lower.includes('white') || lower.includes('спільн') || lower.includes('family')) {
     return 'shared_family';
   }
@@ -43,7 +47,7 @@ function inferAccountType(name: string): Account['type'] {
 export function resolveImportAccounts(
   drafts: Transaction[],
   existingAccounts: Account[],
-  detectedSource: 'monobank' | 'toshl' | 'generic'
+  detectedSource: 'monobank' | 'mono_budget' | 'toshl' | 'generic'
 ): {
   updatedDrafts: Transaction[];
   detectedAccounts: Account[];
@@ -79,10 +83,11 @@ export function resolveImportAccounts(
       if (cardLast4 && a.cardLast4 && a.cardLast4 === cardLast4) return true;
       if (a.id === sample.accountId) return true;
       if (rawName && a.name.toLowerCase().trim() === rawName.toLowerCase().trim()) return true;
-      if (detectedSource === 'monobank' || detectedSource === 'toshl') {
+      if (detectedSource === 'monobank' || detectedSource === 'mono_budget' || detectedSource === 'toshl') {
         const lower = rawName.toLowerCase();
         if ((lower.includes('чорн') || lower.includes('black')) && a.id === 'monobank_black') return true;
         if ((lower.includes('біл') || lower.includes('white')) && a.id === 'monobank_white') return true;
+        if ((lower.includes('фоп') || lower.includes('fop')) && (a.id === 'monobank_fop' || a.name.toLowerCase().includes('фоп'))) return true;
       }
       return false;
     });
@@ -103,12 +108,14 @@ export function resolveImportAccounts(
       const resolvedName = cleanCardName(
         rawName,
         cardLast4,
-        detectedSource === 'monobank' ? 'Monobank' : 'Картка'
+        detectedSource === 'monobank' || detectedSource === 'mono_budget' ? 'Monobank' : 'Картка'
       );
 
       const sanitizedSlug = cardLast4
         ? `card_${cardLast4}`
-        : `acc_${resolvedName.toLowerCase().replace(/[^a-z0-9а-яіїєґ]/gi, '_').slice(0, 20)}`;
+        : sample.accountId && sample.accountId.startsWith('monobank_')
+          ? sample.accountId
+          : `acc_${resolvedName.toLowerCase().replace(/[^a-z0-9а-яіїєґ]/gi, '_').slice(0, 20)}`;
 
       // Ensure uniqueness
       const existsId = (id: string) =>
@@ -177,13 +184,16 @@ export async function processStatementFile(file: File): Promise<ImportSummary> {
   }
 
   // Detect format
-  let detectedSource: 'monobank' | 'toshl' | 'generic' = 'generic';
+  let detectedSource: 'monobank' | 'mono_budget' | 'toshl' | 'generic' = 'generic';
   let draftTransactions: Transaction[] = [];
 
   const existingAccounts = await db.accounts.toArray();
   const defaultCardAcc = existingAccounts.find(a => a.id === 'monobank_black' || a.type === 'bank_card');
 
-  if (isMonobankStatement(headers)) {
+  if (isMonoBudgetStatement(headers)) {
+    detectedSource = 'mono_budget';
+    draftTransactions = await parseMonoBudgetRows(rawRows);
+  } else if (isMonobankStatement(headers)) {
     detectedSource = 'monobank';
     draftTransactions = await parseMonobankRows(
       rawRows,

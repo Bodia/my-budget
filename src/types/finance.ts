@@ -22,7 +22,7 @@ export interface Transaction {
   subCategory?: string;     // Optional subcategory (e.g. "Пальне", "Кава")
   tags?: string[];          // Second-level classification tags: e.g. ["groceries"], ["medicine"], ["zsu"]
   mcc?: number;             // Merchant Category Code (from Monobank)
-  source: 'monobank' | 'toshl' | 'generic' | 'manual';
+  source: 'monobank' | 'mono_budget' | 'toshl' | 'generic' | 'manual';
   accountId: string;        // E.g. "Монобанка Чорна", "Toshl Wallet", "Готівка"
   accountName?: string;     // Extracted or resolved account/card display name from document
   cardLast4?: string;       // Last 4 digits of the card e.g. "1234"
@@ -31,6 +31,7 @@ export interface Transaction {
   isSubscription?: boolean; // Flagged by smart insight engine
   transactionType?: TransactionType; // Functional type of transaction
   isSavings?: boolean;      // Flag indicating this is a jar/deposit savings transaction
+  isExcludedFromBudget?: boolean; // Flag for transfers and operations excluded from budget
   linkedTransactionId?: string; // Paired transaction ID for refunds or ATM transfers
 }
 
@@ -77,7 +78,7 @@ export interface Account {
   cardLast4?: string;       // Last 4 digits of the card e.g. "1234"
   cardNumberMasked?: string;// Formatted masked card e.g. "**** **** **** 1234"
   color?: string;           // Optional accent color for the card
-  role?: 'shared_family' | 'personal' | 'cashback_national' | 'general'; // Contextual account role
+  role?: 'shared_family' | 'personal' | 'cashback_national' | 'business' | 'general'; // Contextual account role
 }
 
 export type InsightType = 'subscription' | 'spike' | 'latte_factor' | 'budget_50_30_20';
@@ -98,7 +99,7 @@ export interface SavingInsight {
 
 export interface ImportSummary {
   fileName: string;
-  detectedSource: 'monobank' | 'toshl' | 'generic';
+  detectedSource: 'monobank' | 'mono_budget' | 'toshl' | 'generic';
   totalRows: number;
   newRows: number;
   duplicateRows: number;

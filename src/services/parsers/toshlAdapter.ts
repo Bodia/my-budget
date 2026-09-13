@@ -5,12 +5,21 @@ import { formatCardMask, extractCardLast4, cleanCardName } from '../../utils/car
 
 export function isToshlStatement(headers: string[]): boolean {
   const normalized = headers.map(h => h.toLowerCase().trim());
+
+  // Reject if it contains Mono Budget signature
+  if (normalized.some(h => h.includes('excluded from budget') || h.includes('виключено з бюджету'))) {
+    return false;
+  }
+
   const hasDate = normalized.includes('date');
   const hasCategory = normalized.includes('category');
-  const hasExpense = normalized.some(h => h.includes('expense') || h.includes('amount'));
+  const hasToshlExpense = normalized.some(h => h.includes('expense amount') || h === 'expense');
+  const hasToshlIncome = normalized.some(h => h.includes('income amount') || h === 'income');
+  const hasMainCurrency = normalized.some(h => h.includes('main currency'));
   const hasAccount = normalized.includes('account');
 
-  return (hasDate && hasCategory && (hasExpense || hasAccount));
+  // Authentic Toshl export has either 'Expense amount' or 'Income amount' or 'Main currency'
+  return hasDate && hasCategory && (hasToshlExpense || hasToshlIncome || (hasAccount && hasMainCurrency));
 }
 
 export function mapToshlCategory(rawCategory: string): { categoryId: string; subCategory?: string } {

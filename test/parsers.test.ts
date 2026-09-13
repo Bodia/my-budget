@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { parseMonobankDate, mapMccToCategory } from '../src/services/parsers/monobankAdapter';
-import { mapToshlCategory } from '../src/services/parsers/toshlAdapter';
+import { parseMonobankDate, mapMccToCategory, isMonobankStatement } from '../src/services/parsers/monobankAdapter';
+import { mapToshlCategory, isToshlStatement } from '../src/services/parsers/toshlAdapter';
+import { isMonoBudgetStatement, parseMonoBudgetDate, mapMonoBudgetCategory, parseMonoBudgetRows } from '../src/services/parsers/monoBudgetAdapter';
 import { computeTransactionHash, deduplicateDrafts } from '../src/services/parsers/deduplication';
 import { matchRule, evaluateTransactionCategory } from '../src/services/rules/ruleEngine';
 import type { CategorizationRule, Transaction, Account } from '../src/types/finance';
@@ -213,5 +214,203 @@ describe('Bank Card Masking & Utils', () => {
     expect(result.detectedAccounts.length).toBe(2);
   });
 });
+
+describe('Format Discrimination: Mono Budget vs Toshl vs Monobank', () => {
+  const monoBudgetHeaders = ['Date', 'Description', 'Category', 'Amount', 'Currency', 'Account', 'Tags', 'Note', 'Excluded from budget'];
+  const toshlHeaders = ['Date', 'Account', 'Category', 'Tags', 'Expense amount', 'Income amount', 'Currency', 'In main currency', 'Main currency', 'Description'];
+  const monobankStatementHeaders = ['Дата і час', 'Деталі операції', 'Сума в валюті картки (UAH)', 'Комісія (UAH)', 'Кешбек (UAH)', 'Залишок', 'Номер картки', 'MCC'];
+
+  it('correctly identifies Mono Budget and distinguishes from Toshl and Monobank', () => {
+    expect(isMonoBudgetStatement(monoBudgetHeaders)).toBe(true);
+    expect(isMonoBudgetStatement(toshlHeaders)).toBe(false);
+    expect(isMonoBudgetStatement(monobankStatementHeaders)).toBe(false);
+
+    expect(isToshlStatement(toshlHeaders)).toBe(true);
+    expect(isToshlStatement(monoBudgetHeaders)).toBe(false);
+    expect(isToshlStatement(monobankStatementHeaders)).toBe(false);
+
+    expect(isMonobankStatement(monobankStatementHeaders)).toBe(true);
+    expect(isMonobankStatement(monoBudgetHeaders)).toBe(false);
+    expect(isMonobankStatement(toshlHeaders)).toBe(false);
+  });
+});
+
+describe('Mono Budget Parser Adapter', () => {
+  it('correctly parses Mono Budget date format YYYY-MM-DD HH:mm', () => {
+    const iso = parseMonoBudgetDate('2026-09-12 17:52');
+    expect(iso).toBe('2026-09-12T17:52:00');
+  });
+
+  it('correctly maps Ukrainian categories from Mono Budget', () => {
+    expect(mapMonoBudgetCategory('Супермаркети').categoryId).toBe('groceries');
+    expect(mapMonoBudgetCategory('Ресторани').categoryId).toBe('dining');
+    expect(mapMonoBudgetCategory('Одяг').categoryId).toBe('shopping');
+    expect(mapMonoBudgetCategory('Комуналка').categoryId).toBe('housing');
+    expect(mapMonoBudgetCategory("Зв'язок").categoryId).toBe('subscriptions');
+    expect(mapMonoBudgetCategory('Авто').categoryId).toBe('transport');
+    expect(mapMonoBudgetCategory('Улюбленці').categoryId).toBe('shopping');
+    expect(mapMonoBudgetCategory('Розваги').categoryId).toBe('travel');
+  });
+
+  it('correctly parses user sample rows with FOP, internal transfers, and charity', async () => {
+    const sampleRows = [
+      {
+        'Date': '2026-09-12 17:52',
+        'Description': 'OLX',
+        'Category': 'Інше',
+        'Amount': -251.80,
+        'Currency': 'UAH',
+        'Account': 'Чорна картка',
+        'Tags': '',
+        'Note': '',
+        'Excluded from budget': 'Ні',
+      },
+      {
+        'Date': '2026-09-12 15:57',
+        'Description': 'WayForPay',
+        'Category': 'Одяг',
+        'Amount': -1280.00,
+        'Currency': 'UAH',
+        'Account': 'Чорна картка',
+        'Tags': '',
+        'Note': '',
+        'Excluded from budget': 'Ні',
+      },
+      {
+        'Date': '2026-09-08 09:16',
+        'Description': 'З гривневого рахунку ФОП',
+        'Category': 'Перекази',
+        'Amount': 82000.00,
+        'Currency': 'UAH',
+        'Account': 'Чорна картка',
+        'Tags': '',
+        'Note': '',
+        'Excluded from budget': 'Так',
+      },
+      {
+        'Date': '2026-09-08 09:16',
+        'Description': 'На чорну картку',
+        'Category': 'Перекази',
+        'Amount': -82000.00,
+        'Currency': 'UAH',
+        'Account': 'ФОП рахунок',
+        'Tags': '',
+        'Note': '',
+        'Excluded from budget': 'Так',
+      },
+      {
+        'Date': '2026-09-08 09:07',
+        'Description': 'Від: ТОВАРИСТВО З ОБМЕЖЕНОЮ ВІДПОВІДАЛЬНІСТЬ "СОМБРА УКРАЇНА"',
+        'Category': 'Перекази',
+        'Amount': 89753.00,
+        'Currency': 'UAH',
+        'Account': 'ФОП рахунок',
+        'Tags': '',
+        'Note': '',
+        'Excluded from budget': 'Ні',
+      },
+      {
+        'Date': '2026-09-03 21:51',
+        'Description': 'Повернись живим',
+        'Category': 'Перекази',
+        'Amount': -20.71,
+        'Currency': 'UAH',
+        'Account': 'Чорна картка',
+        'Tags': '',
+        'Note': '',
+        'Excluded from budget': 'Ні',
+      },
+      {
+        'Date': '2026-09-08 10:16',
+        'Description': 'Поповнення «Invest broker»',
+        'Category': 'Перекази',
+        'Amount': -1000.00,
+        'Currency': 'UAH',
+        'Account': 'Чорна картка',
+        'Tags': '',
+        'Note': '',
+        'Excluded from budget': 'Ні',
+      }
+    ];
+
+    const txs = await parseMonoBudgetRows(sampleRows);
+    expect(txs.length).toBe(7);
+
+    // OLX
+    expect(txs[0].source).toBe('mono_budget');
+    expect(txs[0].amount).toBe(-251.80);
+    expect(txs[0].isExcludedFromBudget).toBe(false);
+    expect(txs[0].accountId).toBe('monobank_black');
+
+    // WayForPay clothes
+    expect(txs[1].categoryId).toBe('shopping');
+    expect(txs[1].subCategory).toBe('Одяг та взуття');
+
+    // Internal transfers excluded from budget
+    expect(txs[2].isExcludedFromBudget).toBe(true);
+    expect(txs[2].transactionType).toBe('transfer');
+    expect(txs[2].accountId).toBe('monobank_black');
+
+    expect(txs[3].isExcludedFromBudget).toBe(true);
+    expect(txs[3].transactionType).toBe('transfer');
+    expect(txs[3].accountId).toBe('monobank_fop');
+
+    // FOP Income
+    expect(txs[4].amount).toBe(89753.00);
+    expect(txs[4].accountId).toBe('monobank_fop');
+    expect(txs[4].isExcludedFromBudget).toBe(false);
+    expect(txs[4].categoryId).toBe('income_salary');
+
+    // Charity
+    expect(txs[5].tags).toContain('zsu');
+    expect(txs[5].tags).toContain('charity');
+
+    // Savings jar
+    expect(txs[6].isSavings).toBe(true);
+    expect(txs[6].transactionType).toBe('savings_jar');
+  });
+
+  it('correctly resolves FOP and Black card accounts during import', async () => {
+    const { resolveImportAccounts } = await import('../src/services/parsers/ingestionManager');
+    const existingAccounts: Account[] = [
+      { id: 'monobank_black', name: 'Monobank Чорна', type: 'bank_card', currency: 'UAH', cardLast4: '1234', cardNumberMasked: '**** **** **** 1234', color: '#1677ff' },
+      { id: 'cash', name: 'Готівка', type: 'cash', currency: 'UAH' },
+    ];
+
+    const sampleRows = [
+      {
+        'Date': '2026-09-12 17:52',
+        'Description': 'OLX',
+        'Category': 'Інше',
+        'Amount': -251.80,
+        'Currency': 'UAH',
+        'Account': 'Чорна картка',
+        'Excluded from budget': 'Ні',
+      },
+      {
+        'Date': '2026-09-08 09:07',
+        'Description': 'СОМБРА',
+        'Category': 'Перекази',
+        'Amount': 89753.00,
+        'Currency': 'UAH',
+        'Account': 'ФОП рахунок',
+        'Excluded from budget': 'Ні',
+      },
+    ];
+
+    const drafts = await parseMonoBudgetRows(sampleRows);
+    const result = resolveImportAccounts(drafts, existingAccounts, 'mono_budget');
+
+    // Black card should map to existing account
+    expect(result.updatedDrafts[0].accountId).toBe('monobank_black');
+
+    // FOP account should be created with role 'business'
+    expect(result.newAccounts.length).toBe(1);
+    expect(result.newAccounts[0].name).toBe('ФОП рахунок');
+    expect(result.newAccounts[0].role).toBe('business');
+    expect(result.updatedDrafts[1].accountId).toBe(result.newAccounts[0].id);
+  });
+});
+
 
 

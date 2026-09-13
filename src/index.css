@@ -260,6 +260,16 @@ body {
   color: var(--danger);
   border-color: var(--danger-border);
 }
+.badge-purple {
+  background: rgba(139, 92, 246, 0.12);
+  color: #8b5cf6;
+  border-color: rgba(139, 92, 246, 0.3);
+}
+.badge-secondary {
+  background: var(--bg-surface-hover);
+  color: var(--text-secondary);
+  border-color: var(--border-default);
+}
 
 /* Form Controls */
 .input, .select {
@@ -291,6 +301,7 @@ body {
   justify-content: center;
   padding: 16px;
   animation: fadeIn 0.15s ease-out;
+  overflow-y: auto;
 }
 
 .modal-content {
@@ -300,11 +311,27 @@ body {
   box-shadow: var(--shadow-lg);
   max-width: 680px;
   width: 100%;
-  max-height: 90vh;
+  max-height: calc(100vh - 32px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   animation: scaleUp 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  margin: auto;
+}
+
+.modal-header {
+  flex-shrink: 0;
+}
+
+.modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.modal-footer {
+  flex-shrink: 0;
 }
 
 @keyframes fadeIn {
@@ -332,3 +359,57 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-tertiary);
 }
+
+html {
+  overflow-x: hidden;
+}
+
+/* Responsive Header & Navigation */
+.app-header-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.app-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-surface);
+  padding: 4px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  overflow-x: auto;
+  scrollbar-width: none;
+  max-width: 100%;
+}
+
+.app-nav::-webkit-scrollbar {
+  display: none;
+}
+
+@media (max-width: 1240px) {
+  .nav-btn-text-long {
+    display: none;
+  }
+}
+
+@media (max-width: 1080px) {
+  .header-brand-subtitle {
+    display: none;
+  }
+  .import-btn-label {
+    display: none;
+  }
+}
+
+@media (max-width: 880px) {
+  .nav-btn-text {
+    display: none;
+  }
+}
+

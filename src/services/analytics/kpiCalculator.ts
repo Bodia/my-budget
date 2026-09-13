@@ -70,7 +70,7 @@ export function calculateKPIs(
   for (const t of transactions) {
     const isJarSavings = t.isSavings === true || t.transactionType === 'savings_jar';
     const isRefund = t.transactionType === 'refund' || (t.amount > 0 && /скасування|повернення|refund/i.test(t.description));
-    const isTransfer = t.transactionType === 'transfer';
+    const isTransfer = t.transactionType === 'transfer' || t.isExcludedFromBudget === true;
 
     if (isJarSavings) {
       if (t.amount < 0) {
@@ -143,7 +143,7 @@ export function calculateCategoryBreakdown(
 
   for (const t of transactions) {
     // Exclude jar savings and pure internal transfers from living expenses breakdown
-    if (t.isSavings || t.transactionType === 'savings_jar' || t.transactionType === 'transfer') {
+    if (t.isSavings || t.transactionType === 'savings_jar' || t.transactionType === 'transfer' || t.isExcludedFromBudget) {
       continue;
     }
 
@@ -195,7 +195,7 @@ export function calculateMonthlyCashflow(
 
   for (const t of transactions) {
     if (!t.date) continue;
-    if (t.isSavings || t.transactionType === 'savings_jar' || t.transactionType === 'transfer') {
+    if (t.isSavings || t.transactionType === 'savings_jar' || t.transactionType === 'transfer' || t.isExcludedFromBudget) {
       continue;
     }
 
@@ -241,7 +241,7 @@ export function calculateTopMerchants(
 
   for (const t of transactions) {
     // Skip savings jars and internal transfers
-    if (t.isSavings || t.transactionType === 'savings_jar' || t.transactionType === 'transfer') {
+    if (t.isSavings || t.transactionType === 'savings_jar' || t.transactionType === 'transfer' || t.isExcludedFromBudget) {
       continue;
     }
 
@@ -275,7 +275,7 @@ export function calculateDailyHeatmap(
   const dailyMap = new Map<string, number>();
 
   for (const t of transactions) {
-    if (t.amount < 0 && t.date && !t.isSavings && t.transactionType !== 'savings_jar' && t.transactionType !== 'transfer') {
+    if (t.amount < 0 && t.date && !t.isSavings && t.transactionType !== 'savings_jar' && t.transactionType !== 'transfer' && !t.isExcludedFromBudget) {
       const dateKey = t.date.slice(0, 10); // "YYYY-MM-DD"
       const current = dailyMap.get(dateKey) || 0;
       dailyMap.set(dateKey, current + Math.abs(t.amount));

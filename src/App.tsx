@@ -261,7 +261,7 @@ export const App: React.FC = () => {
                     База готова до ваших даних
                   </h2>
                   <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                    Демо-дані видалено. Завантажте файл виписки з Monobank (.xlsx, .csv) або Toshl Finance, щоб побудувати інтерактивні графіки та побачити рекомендації з економії.
+                    Демо-дані видалено. Завантажте файл виписки з Monobank (.xlsx, .csv), Моно Бюджет або Toshl Finance, щоб побудувати інтерактивні графіки та побачити рекомендації з економії.
                   </p>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'center', marginTop: 4 }}>

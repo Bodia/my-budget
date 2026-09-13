@@ -80,19 +80,20 @@ export const ImportModal: React.FC<ImportModalProps> = ({
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
         {/* Modal Header */}
-        <div style={{
+        <div className="modal-header" style={{
           padding: '20px 24px',
           borderBottom: '1px solid var(--border-default)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          flexShrink: 0,
         }}>
           <div>
             <h3 style={{ fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
               Імпорт банківської виписки
             </h3>
             <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              Підтримуються вигрузки Monobank (XLSX, CSV) та Toshl Finance
+              Підтримуються вигрузки Monobank (XLSX, CSV), Моно Бюджет та Toshl Finance
             </p>
           </div>
           <button onClick={onClose} className="btn btn-ghost btn-sm" style={{ padding: 4 }}>
@@ -101,7 +102,15 @@ export const ImportModal: React.FC<ImportModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div className="modal-body" style={{
+          padding: 24,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 20,
+          flex: '1 1 auto',
+          minHeight: 0,
+          overflowY: 'auto',
+        }}>
           {!summary ? (
             <>
               {/* Dropzone */}
@@ -146,7 +155,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                   {isProcessing ? 'Обробка та дедуплікація файлу...' : 'Перетягніть файл сюди або натисніть для вибору'}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                  .XLSX, .XLS або .CSV (Monobank, Toshl тощо)
+                  .XLSX, .XLS або .CSV (Monobank, Моно Бюджет, Toshl тощо)
                 </div>
               </div>
 
@@ -217,8 +226,22 @@ export const ImportModal: React.FC<ImportModalProps> = ({
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13 }}>
                 <span style={{ color: 'var(--text-secondary)' }}>Визначений формат:</span>
-                <span className="badge badge-primary" style={{ textTransform: 'capitalize' }}>
-                  {summary.detectedSource === 'monobank' ? 'Виписка Monobank' : summary.detectedSource === 'toshl' ? 'Toshl Finance' : 'Універсальний'}
+                <span className={`badge ${
+                  summary.detectedSource === 'monobank'
+                    ? 'badge-primary'
+                    : summary.detectedSource === 'mono_budget'
+                    ? 'badge-purple'
+                    : summary.detectedSource === 'toshl'
+                    ? 'badge-warning'
+                    : 'badge-default'
+                }`} style={{ textTransform: 'capitalize' }}>
+                  {summary.detectedSource === 'monobank' 
+                    ? 'Виписка Monobank' 
+                    : summary.detectedSource === 'mono_budget'
+                    ? 'Моно Бюджет'
+                    : summary.detectedSource === 'toshl' 
+                    ? 'Toshl Finance' 
+                    : 'Універсальний'}
                 </span>
               </div>
 
@@ -383,13 +406,14 @@ export const ImportModal: React.FC<ImportModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div style={{
+        <div className="modal-footer" style={{
           padding: '16px 24px',
           borderTop: '1px solid var(--border-default)',
           background: 'var(--bg-surface)',
           display: 'flex',
           justifyContent: 'flex-end',
           gap: 10,
+          flexShrink: 0,
         }}>
           {summary && (
             <button

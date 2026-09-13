@@ -363,7 +363,8 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
               onChange={(e) => { setSelectedSourceFilter(e.target.value); setCurrentPage(1); }}
             >
               <option value="all">Усі джерела</option>
-              <option value="monobank">Monobank</option>
+              <option value="mono_budget">Моно Бюджет</option>
+              <option value="monobank">Monobank (виписка)</option>
               <option value="toshl">Toshl Finance</option>
               <option value="generic">Інші</option>
             </select>
@@ -479,9 +480,9 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
                               ↩️ Повернення
                             </span>
                           )}
-                          {t.transactionType === 'transfer' && (
+                          {(t.transactionType === 'transfer' || t.isExcludedFromBudget) && (
                             <span className="badge" style={{ background: 'rgba(148, 163, 184, 0.15)', color: 'var(--text-secondary)', fontSize: 10, padding: '1px 5px' }}>
-                              🔄 Переказ
+                              🔄 Переказ {t.isExcludedFromBudget ? '(поза бюджетом)' : ''}
                             </span>
                           )}
                           {isZsu && (
@@ -581,8 +582,16 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
                         </select>
                       </td>
                       <td style={{ padding: '12px 16px' }}>
-                        <span className={`badge ${t.source === 'monobank' ? 'badge-primary' : 'badge-warning'}`} style={{ textTransform: 'capitalize' }}>
-                          {t.source}
+                        <span className={`badge ${
+                          t.source === 'monobank' 
+                            ? 'badge-primary' 
+                            : t.source === 'mono_budget'
+                            ? 'badge-purple'
+                            : t.source === 'toshl' 
+                            ? 'badge-warning' 
+                            : 'badge-secondary'
+                        }`} style={{ textTransform: 'capitalize' }}>
+                          {t.source === 'mono_budget' ? 'Моно Бюджет' : t.source === 'monobank' ? 'Monobank' : t.source === 'toshl' ? 'Toshl' : t.source}
                         </span>
                       </td>
                       <td className="tabular-nums" style={{
@@ -644,12 +653,13 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
         <div className="modal-backdrop" onClick={() => setCardModalState(null)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
             {/* Header */}
-            <div style={{
+            <div className="modal-header" style={{
               padding: '18px 24px',
               borderBottom: '1px solid var(--border-default)',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
+              flexShrink: 0,
             }}>
               <div>
                 <h3 style={{ fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
@@ -669,7 +679,15 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
             </div>
 
             {/* Body */}
-            <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <div className="modal-body" style={{
+              padding: 24,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 18,
+              flex: '1 1 auto',
+              minHeight: 0,
+              overflowY: 'auto',
+            }}>
               {cardModalState.error && (
                 <div style={{
                   display: 'flex',
@@ -810,12 +828,13 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
             </div>
 
             {/* Footer */}
-            <div style={{
+            <div className="modal-footer" style={{
               padding: '16px 24px',
               borderTop: '1px solid var(--border-default)',
               display: 'flex',
               justifyContent: 'flex-end',
               gap: 10,
+              flexShrink: 0,
             }}>
               <button
                 onClick={() => setCardModalState(null)}
