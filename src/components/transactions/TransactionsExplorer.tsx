@@ -40,7 +40,6 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('all');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
-  const [selectedSourceFilter, setSelectedSourceFilter] = useState<string>('all');
   const [selectedCardFilter, setSelectedCardFilter] = useState<string>('all');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [currentPage, setCurrentPage] = useState(1);
@@ -107,10 +106,6 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
       list = list.filter(t => t.categoryId === selectedCategoryFilter);
     }
 
-    if (selectedSourceFilter !== 'all') {
-      list = list.filter(t => t.source === selectedSourceFilter);
-    }
-
     if (selectedCardFilter !== 'all') {
       if (selectedCardFilter === 'none') {
         list = list.filter(t => !t.cardLast4);
@@ -130,7 +125,7 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
     });
 
     return list;
-  }, [transactions, searchTerm, selectedTypeFilter, selectedCategoryFilter, selectedSourceFilter, selectedCardFilter, sortOrder, accountMap]);
+  }, [transactions, searchTerm, selectedTypeFilter, selectedCategoryFilter, selectedCardFilter, sortOrder, accountMap]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const paginated = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
