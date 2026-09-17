@@ -43,13 +43,13 @@ export const BudgetProgressList: React.FC<BudgetProgressListProps> = ({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {budgetedCategories.map((c) => {
             const limit = c.budgetLimit || 1;
-            const percent = Math.min(150, Math.round((c.amount / limit) * 100));
+            const percent = Math.round((c.amount / limit) * 100);
             const isOver = c.amount > limit;
-            const isWarning = !isOver && percent >= 75;
+            const isWarning = !isOver && percent >= 80;
 
-            let progressColor = '#52c41a'; // emerald
-            if (isOver) progressColor = '#ff4d4f'; // crimson
-            else if (isWarning) progressColor = '#faad14'; // amber
+            let progressColor = '#10b981'; // emerald
+            if (isOver) progressColor = '#f43f5e'; // crimson
+            else if (isWarning) progressColor = '#f59e0b'; // amber
 
             return (
               <div key={c.categoryId} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -59,7 +59,12 @@ export const BudgetProgressList: React.FC<BudgetProgressListProps> = ({
                     <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{c.categoryName}</span>
                     {isOver && (
                       <span className="badge badge-danger" style={{ fontSize: 10, padding: '1px 5px' }}>
-                        <AlertCircle size={10} /> Перевитрата
+                        <AlertCircle size={10} /> Перевитрата (+{formatUah(c.amount - limit)})
+                      </span>
+                    )}
+                    {isWarning && (
+                      <span className="badge badge-warning" style={{ fontSize: 10, padding: '1px 5px' }}>
+                        Увага (&gt;80%)
                       </span>
                     )}
                   </div>
@@ -75,7 +80,7 @@ export const BudgetProgressList: React.FC<BudgetProgressListProps> = ({
                   </div>
                 </div>
 
-                {/* Progress Bar (Ant Design Style) */}
+                {/* Progress Bar */}
                 <div style={{
                   width: '100%',
                   height: 8,

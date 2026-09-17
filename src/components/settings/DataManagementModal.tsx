@@ -3,19 +3,20 @@ import {
   Download, 
   Upload, 
   Trash2, 
-  Save, 
-  Check,
   Sparkles 
 } from 'lucide-react';
-import type { Category, Budget, CategorizationRule } from '../../types/finance';
+import type { Category, Budget, CategorizationRule, Transaction } from '../../types/finance';
 import { db } from '../../db/database';
 import { CardsManager } from './CardsManager';
+import { CategoryManager } from './CategoryManager';
+import { BudgetLimitsManager } from './BudgetLimitsManager';
 import { reclassifyAllTransactions } from '../../services/intelligence/recognitionEngine';
 
 interface DataManagementModalProps {
   categories: Category[];
   budgets: Budget[];
   rules: CategorizationRule[];
+  transactions?: Transaction[];
   onReload: () => void;
 }
 
@@ -23,12 +24,9 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
   categories,
   budgets,
   rules,
+  transactions = [],
   onReload,
 }) => {
-  const [budgetLimits, setBudgetLimits] = useState<Record<string, number>>(
-    Object.fromEntries(budgets.map(b => [b.categoryId, b.monthlyLimit]))
-  );
-  const [saveSuccess, setSaveSuccess] = useState(false);
   const [isReclassifying, setIsReclassifying] = useState(false);
 
   const handleReclassify = async () => {
@@ -46,7 +44,7 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
 
   // Backup Export
   const handleExportBackup = async () => {
-    const transactions = await db.transactions.toArray();
+    const allTransactions = await db.transactions.toArray();
     const allCategories = await db.categories.toArray();
     const allBudgets = await db.budgets.toArray();
     const allRules = await db.rules.toArray();
@@ -55,7 +53,7 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
     const backupData = {
       version: 2,
       exportedAt: new Date().toISOString(),
-      transactions,
+      transactions: allTransactions,
       categories: allCategories,
       budgets: allBudgets,
       rules: allRules,
@@ -103,27 +101,6 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
       }
     };
     reader.readAsText(file);
-  };
-
-  // Save budget limits
-  const handleSaveBudgets = async () => {
-    for (const [catId, limit] of Object.entries(budgetLimits)) {
-      const existing = budgets.find(b => b.categoryId === catId);
-      if (existing) {
-        await db.budgets.update(existing.id, { monthlyLimit: limit });
-      } else {
-        await db.budgets.add({
-          id: `b_${catId}`,
-          categoryId: catId,
-          monthlyLimit: limit,
-          currency: 'UAH',
-          alertThresholdPercent: 80,
-        });
-      }
-    }
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 2000);
-    onReload();
   };
 
   // Clear Database
@@ -175,59 +152,19 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
         </div>
       </div>
 
+      {/* Category Manager (SCRUM-10) */}
+      <CategoryManager categories={categories} onNotify={onReload} />
+
       {/* Bank Cards & Accounts Manager */}
       <CardsManager onNotify={onReload} />
 
-      {/* Monthly Budget Limits Configuration */}
-      <div className="ant-card" style={{ padding: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <div>
-            <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
-              Щомісячні бюджети та ліміти витрат (UAH)
-            </h3>
-            <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              Вкажіть планову суму витрат на кожну категорію
-            </p>
-          </div>
-          <button onClick={handleSaveBudgets} className="btn btn-primary btn-sm">
-            {saveSuccess ? <Check size={14} /> : <Save size={14} />}
-            <span>{saveSuccess ? 'Збережено!' : 'Зберегти зміни'}</span>
-          </button>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-          {categories.filter(c => c.type === 'expense').map((cat) => (
-            <div key={cat.id} style={{
-              padding: 12,
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--border-default)',
-              background: 'var(--bg-surface-hover)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ width: 10, height: 10, borderRadius: '50%', background: cat.color }} />
-                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{cat.name}</span>
-              </div>
-              <div style={{ width: 120 }}>
-                <input
-                  type="number"
-                  className="input"
-                  style={{ padding: '4px 8px', fontSize: 13, textAlign: 'right' }}
-                  value={budgetLimits[cat.id] || ''}
-                  placeholder="0"
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value) || 0;
-                    setBudgetLimits(prev => ({ ...prev, [cat.id]: val }));
-                  }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* Dynamic Monthly Budget Limits Manager (SCRUM-11) */}
+      <BudgetLimitsManager 
+        categories={categories}
+        budgets={budgets}
+        transactions={transactions}
+        onNotify={onReload}
+      />
 
       {/* Rules Manager List */}
       <div className="ant-card" style={{ padding: 24 }}>

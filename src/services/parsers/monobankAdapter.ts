@@ -79,6 +79,11 @@ export function mapMccToCategory(mcc?: number): { categoryId: string; subCategor
     return { categoryId: 'shopping', subCategory: 'Шопінг' };
   }
 
+  // Taxes & Government Services
+  if ([9311, 9222, 9399].includes(mcc)) {
+    return { categoryId: 'taxes_fop', subCategory: 'Єдиний податок' };
+  }
+
   // Travel & Hotels
   if ((mcc >= 3000 && mcc <= 3299) || [4511, 7011].includes(mcc)) {
     return { categoryId: 'travel', subCategory: 'Подорожі' };

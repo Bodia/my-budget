@@ -11,9 +11,16 @@ export interface KPISummary {
   totalSavedInJars: number; // savings in Monobank jars / deposits
   jarSavingsRate: number; // % of income saved in jars
   totalDonationsZSU: number; // Armed Forces & charity donations
-  // MoM deltas
-  expensesDeltaPercent: number; // positive = spent more, negative = spent less
-  incomeDeltaPercent: number;
+  // Real MoM deltas (null if no previous period data exists)
+  expensesDeltaPercent: number | null; // e.g. -4.8 or +12.3
+  incomeDeltaPercent: number | null;
+  netSavingsDeltaPercent: number | null;
+  savingsRateDeltaPercent: number | null;
+  // Absolute deltas in UAH for tooltips
+  expensesDeltaAmount: number;
+  incomeDeltaAmount: number;
+  netSavingsDeltaAmount: number;
+  hasPreviousPeriodData: boolean;
 }
 
 export interface CategoryExpenseBreakdown {
@@ -58,10 +65,17 @@ export function formatUah(amount: number): string {
   return new Intl.NumberFormat('uk-UA').format(rounded) + ' ₴';
 }
 
-export function calculateKPIs(
-  transactions: Transaction[],
-  daysCount = 30
-): KPISummary {
+interface PeriodMetrics {
+  totalExpenses: number;
+  totalIncome: number;
+  netSavings: number;
+  savingsRate: number;
+  totalSavedInJars: number;
+  totalDonationsZSU: number;
+  transactionCount: number;
+}
+
+function calculatePeriodMetrics(transactions: Transaction[]): PeriodMetrics {
   let totalExpenses = 0;
   let totalIncome = 0;
   let totalSavedInJars = 0;
@@ -76,14 +90,12 @@ export function calculateKPIs(
       if (t.amount < 0) {
         totalSavedInJars += Math.abs(t.amount);
       } else {
-        // Withdrawing from jar reduces net jar saved or is transferred back
         totalSavedInJars = Math.max(0, totalSavedInJars - t.amount);
       }
       continue;
     }
 
     if (isRefund) {
-      // Netting refund against living expenses
       totalExpenses = Math.max(0, totalExpenses - Math.abs(t.amount));
       continue;
     }
@@ -112,21 +124,83 @@ export function calculateKPIs(
 
   const netSavings = totalIncome - totalExpenses;
   const savingsRate = totalIncome > 0 ? Math.max(0, (netSavings / totalIncome) * 100) : 0;
-  const jarSavingsRate = totalIncome > 0 ? Math.min(100, (totalSavedInJars / totalIncome) * 100) : 0;
-  const dailyBurnRate = daysCount > 0 ? totalExpenses / daysCount : 0;
 
   return {
     totalExpenses,
     totalIncome,
     netSavings,
-    savingsRate: parseFloat(savingsRate.toFixed(1)),
-    jarSavingsRate: parseFloat(jarSavingsRate.toFixed(1)),
+    savingsRate,
     totalSavedInJars,
     totalDonationsZSU,
-    dailyBurnRate: parseFloat(dailyBurnRate.toFixed(0)),
     transactionCount: transactions.length,
-    expensesDeltaPercent: -4.8,
-    incomeDeltaPercent: 2.5,
+  };
+}
+
+export function calculateKPIs(
+  transactions: Transaction[],
+  daysCount = 30,
+  previousPeriodTransactions?: Transaction[]
+): KPISummary {
+  const current = calculatePeriodMetrics(transactions);
+  const dailyBurnRate = daysCount > 0 ? current.totalExpenses / daysCount : 0;
+  const jarSavingsRate = current.totalIncome > 0 ? Math.min(100, (current.totalSavedInJars / current.totalIncome) * 100) : 0;
+
+  let hasPreviousPeriodData = false;
+  let expensesDeltaPercent: number | null = null;
+  let incomeDeltaPercent: number | null = null;
+  let netSavingsDeltaPercent: number | null = null;
+  let savingsRateDeltaPercent: number | null = null;
+  let expensesDeltaAmount = 0;
+  let incomeDeltaAmount = 0;
+  let netSavingsDeltaAmount = 0;
+
+  if (previousPeriodTransactions && previousPeriodTransactions.length > 0) {
+    const prev = calculatePeriodMetrics(previousPeriodTransactions);
+    hasPreviousPeriodData = true;
+
+    expensesDeltaAmount = current.totalExpenses - prev.totalExpenses;
+    incomeDeltaAmount = current.totalIncome - prev.totalIncome;
+    netSavingsDeltaAmount = current.netSavings - prev.netSavings;
+
+    if (prev.totalExpenses > 0) {
+      expensesDeltaPercent = parseFloat((((current.totalExpenses - prev.totalExpenses) / prev.totalExpenses) * 100).toFixed(1));
+    } else {
+      expensesDeltaPercent = current.totalExpenses > 0 ? 100 : 0;
+    }
+
+    if (prev.totalIncome > 0) {
+      incomeDeltaPercent = parseFloat((((current.totalIncome - prev.totalIncome) / prev.totalIncome) * 100).toFixed(1));
+    } else {
+      incomeDeltaPercent = current.totalIncome > 0 ? 100 : 0;
+    }
+
+    if (prev.netSavings !== 0) {
+      netSavingsDeltaPercent = parseFloat((((current.netSavings - prev.netSavings) / Math.abs(prev.netSavings)) * 100).toFixed(1));
+    } else {
+      netSavingsDeltaPercent = current.netSavings > 0 ? 100 : 0;
+    }
+
+    savingsRateDeltaPercent = parseFloat((current.savingsRate - prev.savingsRate).toFixed(1));
+  }
+
+  return {
+    totalExpenses: current.totalExpenses,
+    totalIncome: current.totalIncome,
+    netSavings: current.netSavings,
+    savingsRate: parseFloat(current.savingsRate.toFixed(1)),
+    jarSavingsRate: parseFloat(jarSavingsRate.toFixed(1)),
+    totalSavedInJars: current.totalSavedInJars,
+    totalDonationsZSU: current.totalDonationsZSU,
+    dailyBurnRate: parseFloat(dailyBurnRate.toFixed(0)),
+    transactionCount: current.transactionCount,
+    expensesDeltaPercent,
+    incomeDeltaPercent,
+    netSavingsDeltaPercent,
+    savingsRateDeltaPercent,
+    expensesDeltaAmount,
+    incomeDeltaAmount,
+    netSavingsDeltaAmount,
+    hasPreviousPeriodData,
   };
 }
 

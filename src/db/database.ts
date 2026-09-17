@@ -88,7 +88,16 @@ export const DEFAULT_CATEGORIES: Category[] = [
     color: '#64748b',
     type: 'expense',
     isEssential: true,
-    subCategories: ['Банківські комісії', 'Перекази', 'Податки'],
+    subCategories: ['Банківські комісії', 'Перекази'],
+  },
+  {
+    id: 'taxes_fop',
+    name: 'Податки та ФОП',
+    icon: 'Receipt',
+    color: '#0284c7',
+    type: 'expense',
+    isEssential: true,
+    subCategories: ['Єдиний податок', 'ЄСВ', 'Військовий збір', 'РКО та комісії банку'],
   },
   {
     id: 'other',
@@ -124,6 +133,7 @@ export const DEFAULT_BUDGETS: Budget[] = [
   { id: 'b_dining', categoryId: 'dining', monthlyLimit: 6000, currency: 'UAH', alertThresholdPercent: 85 },
   { id: 'b_transport', categoryId: 'transport', monthlyLimit: 4500, currency: 'UAH', alertThresholdPercent: 80 },
   { id: 'b_subscriptions', categoryId: 'subscriptions', monthlyLimit: 1500, currency: 'UAH', alertThresholdPercent: 90 },
+  { id: 'b_taxes_fop', categoryId: 'taxes_fop', monthlyLimit: 5000, currency: 'UAH', alertThresholdPercent: 80 },
 ];
 
 export const DEFAULT_EXCHANGE_RATES: ExchangeRate[] = [
@@ -237,6 +247,26 @@ class PersonalFinanceDB extends Dexie {
             isSavings: Boolean(isSav),
           });
         }
+      }
+    });
+
+    this.version(4).stores({
+      categories: 'id, type, isCustom',
+      budgets: 'id, categoryId, month',
+    }).upgrade(async (tx) => {
+      const categoriesTable = tx.table('categories');
+      const existingTax = await categoriesTable.get('taxes_fop');
+      if (!existingTax) {
+        await categoriesTable.add({
+          id: 'taxes_fop',
+          name: 'Податки та ФОП',
+          icon: 'Receipt',
+          color: '#0284c7',
+          type: 'expense',
+          isEssential: true,
+          subCategories: ['Єдиний податок', 'ЄСВ', 'Військовий збір', 'РКО та комісії банку'],
+          isCustom: false,
+        });
       }
     });
 

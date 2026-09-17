@@ -43,6 +43,7 @@ export interface Category {
   type: 'expense' | 'income';
   isEssential: boolean;     // For 50/30/20 budget analysis (Needs vs Wants)
   subCategories: string[];
+  isCustom?: boolean;       // True if created by user, false/undefined if default system category
 }
 
 export interface Budget {
@@ -51,6 +52,7 @@ export interface Budget {
   monthlyLimit: number;     // Limit in base currency (UAH)
   currency: CurrencyCode;
   alertThresholdPercent: number; // Defaults to 80%
+  month?: string;           // Optional period e.g. "2024-03" or undefined for default ongoing monthly limit
 }
 
 export interface CategorizationRule {

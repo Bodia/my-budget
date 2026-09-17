@@ -50,6 +50,43 @@ const MERCHANT_RULES: MerchantRule[] = [
     tags: ['charity'],
   },
 
+  // --- Taxes & FOP (SCRUM-10) ---
+  {
+    pattern: /єдиний\s*податок|єдиного\s*податку|\bєн\b|єдиний\s*податок\s*фоп/i,
+    cleanName: 'Єдиний податок ФОП',
+    categoryId: 'taxes_fop',
+    subCategory: 'Єдиний податок',
+    tags: ['taxes', 'fop', 'single_tax'],
+  },
+  {
+    pattern: /\bєсв\b|єдиний\s*соціальний\s*внесок|єдиного\s*соціального\s*внеску|страхові\s*внески/i,
+    cleanName: 'ЄСВ (Єдиний соціальний внесок)',
+    categoryId: 'taxes_fop',
+    subCategory: 'ЄСВ',
+    tags: ['taxes', 'fop', 'esv'],
+  },
+  {
+    pattern: /військовий\s*збір|військового\s*збору/i,
+    cleanName: 'Військовий збір',
+    categoryId: 'taxes_fop',
+    subCategory: 'Військовий збір',
+    tags: ['taxes', 'fop', 'military_tax'],
+  },
+  {
+    pattern: /UA\d{2}899998\d+|гу\s*дпс|гудпс|дпс\s*україни|казначейство\s*україни|казначейств|податков\w+\s*інспекці/i,
+    cleanName: 'Податки (Казначейство України)',
+    categoryId: 'taxes_fop',
+    subCategory: 'Єдиний податок',
+    tags: ['taxes', 'treasury', 'fop'],
+  },
+  {
+    pattern: /\bрко\b|розрахунково-касове|комісія\s*за\s*обслуговування\s*рахунку|комісія\s*банку\s*за\s*ведення\s*рахунку/i,
+    cleanName: 'РКО та обслуговування рахунку ФОП',
+    categoryId: 'taxes_fop',
+    subCategory: 'РКО та комісії банку',
+    tags: ['taxes', 'fop', 'bank_fees'],
+  },
+
   // --- Supermarkets & Groceries ---
   {
     pattern: /сільпо|silpo/i,

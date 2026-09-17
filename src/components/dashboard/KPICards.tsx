@@ -45,10 +45,25 @@ export const KPICards: React.FC<KPICardsProps> = ({ kpi }) => {
           {formatUah(kpi.totalExpenses)}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
-          <span className="badge badge-success" style={{ fontSize: 11 }}>
-            ↓ 4.8%
+          {kpi.expensesDeltaPercent !== null ? (
+            <span 
+              className={kpi.expensesDeltaPercent <= 0 ? 'badge badge-success' : 'badge badge-danger'} 
+              style={{ fontSize: 11 }}
+              title={`${kpi.expensesDeltaAmount >= 0 ? '+' : ''}${formatUah(kpi.expensesDeltaAmount)} порівняно з минулим періодом`}
+            >
+              {kpi.expensesDeltaPercent <= 0 ? '↓ ' : '↑ '}
+              {Math.abs(kpi.expensesDeltaPercent)}%
+            </span>
+          ) : (
+            <span className="badge badge-neutral" style={{ fontSize: 11 }} title="Базовий період (немає даних попереднього місяця)">
+              N/A
+            </span>
+          )}
+          <span>
+            {kpi.expensesDeltaPercent !== null 
+              ? `${kpi.expensesDeltaAmount <= 0 ? 'економія' : 'зростання'} ${formatUah(Math.abs(kpi.expensesDeltaAmount))}` 
+              : 'базовий період'}
           </span>
-          <span>порівняно з минулим періодом</span>
         </div>
       </div>
 
@@ -82,10 +97,25 @@ export const KPICards: React.FC<KPICardsProps> = ({ kpi }) => {
           {formatUah(kpi.totalIncome)}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
-          <span className="badge badge-primary" style={{ fontSize: 11 }}>
-            +2.5%
+          {kpi.incomeDeltaPercent !== null ? (
+            <span 
+              className={kpi.incomeDeltaPercent >= 0 ? 'badge badge-success' : 'badge badge-danger'} 
+              style={{ fontSize: 11 }}
+              title={`${kpi.incomeDeltaAmount >= 0 ? '+' : ''}${formatUah(kpi.incomeDeltaAmount)} порівняно з минулим періодом`}
+            >
+              {kpi.incomeDeltaPercent >= 0 ? '↑ +' : '↓ '}
+              {Math.abs(kpi.incomeDeltaPercent)}%
+            </span>
+          ) : (
+            <span className="badge badge-neutral" style={{ fontSize: 11 }} title="Базовий період">
+              N/A
+            </span>
+          )}
+          <span>
+            {kpi.incomeDeltaPercent !== null 
+              ? `${kpi.incomeDeltaAmount >= 0 ? '+' : ''}${formatUah(kpi.incomeDeltaAmount)} до минулого` 
+              : 'стабільний грошовий потік'}
           </span>
-          <span>стабільний грошовий потік</span>
         </div>
       </div>
 
@@ -122,7 +152,16 @@ export const KPICards: React.FC<KPICardsProps> = ({ kpi }) => {
           <span className="badge badge-success" style={{ fontSize: 11 }}>
             {kpi.savingsRate}%
           </span>
-          <span>ставка заощаджень від доходу</span>
+          <span>ставка заощаджень</span>
+          {kpi.netSavingsDeltaPercent !== null && (
+            <span 
+              className={kpi.netSavingsDeltaPercent >= 0 ? 'badge badge-primary' : 'badge badge-neutral'} 
+              style={{ fontSize: 10, padding: '1px 5px' }}
+              title={`Зміна залишку: ${kpi.netSavingsDeltaAmount >= 0 ? '+' : ''}${formatUah(kpi.netSavingsDeltaAmount)}`}
+            >
+              {kpi.netSavingsDeltaPercent >= 0 ? '↑ +' : '↓ '}{Math.abs(kpi.netSavingsDeltaPercent)}% MoM
+            </span>
+          )}
         </div>
       </div>
 

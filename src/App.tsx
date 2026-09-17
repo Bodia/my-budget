@@ -98,11 +98,43 @@ export const App: React.FC = () => {
     return list;
   }, [rawTransactions, timeRange, currency, exchangeRates]);
 
-  // Calculated Analytics
+  // Previous Period Transactions for Dynamic MoM comparison (SCRUM-9)
+  const previousPeriodTransactions = useMemo(() => {
+    if (!rawTransactions || rawTransactions.length === 0) return [];
+
+    let list = [...rawTransactions];
+    const now = new Date();
+
+    if (timeRange !== 'all') {
+      const months = timeRange === '1m' ? 1 : timeRange === '3m' ? 3 : timeRange === '6m' ? 6 : 12;
+      const currentCutoff = new Date(now.getFullYear(), now.getMonth() - months, 1).toISOString();
+      const prevCutoff = new Date(now.getFullYear(), now.getMonth() - (months * 2), 1).toISOString();
+      list = list.filter(t => t.date >= prevCutoff && t.date < currentCutoff);
+    } else {
+      // For 'all', compare current calendar month with previous calendar month
+      const currentMonthCutoff = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const prevMonthCutoff = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
+      list = list.filter(t => t.date >= prevMonthCutoff && t.date < currentMonthCutoff);
+    }
+
+    if (currency !== 'UAH' && exchangeRates) {
+      const rateObj = exchangeRates.find(r => r.currency === currency);
+      const rate = rateObj && rateObj.rateToUah > 0 ? rateObj.rateToUah : (currency === 'USD' ? 41.5 : 45.2);
+      list = list.map(t => ({
+        ...t,
+        amount: parseFloat((t.amount / rate).toFixed(2)),
+        currency,
+      }));
+    }
+
+    return list;
+  }, [rawTransactions, timeRange, currency, exchangeRates]);
+
+  // Calculated Analytics with real MoM Deltas
   const kpi = useMemo(() => {
     const days = timeRange === '1m' ? 30 : timeRange === '3m' ? 90 : timeRange === '6m' ? 180 : 365;
-    return calculateKPIs(filteredTransactions, days);
-  }, [filteredTransactions, timeRange]);
+    return calculateKPIs(filteredTransactions, days, previousPeriodTransactions);
+  }, [filteredTransactions, previousPeriodTransactions, timeRange]);
 
   const categoryBreakdown = useMemo(() => {
     return calculateCategoryBreakdown(filteredTransactions, categories || [], budgets || []);
@@ -394,6 +426,7 @@ export const App: React.FC = () => {
             categories={categories || []}
             budgets={budgets || []}
             rules={rules || []}
+            transactions={filteredTransactions}
             onReload={() => showToast('Дані успішно оновлено')}
           />
         )}
