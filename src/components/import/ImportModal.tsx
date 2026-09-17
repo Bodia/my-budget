@@ -90,10 +90,10 @@ export const ImportModal: React.FC<ImportModalProps> = ({
         }}>
           <div>
             <h3 style={{ fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
-              Імпорт банківської виписки
+              Імпорт виписки
             </h3>
             <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              Підтримуються вигрузки Monobank (XLSX, CSV), Моно Бюджет та Toshl Finance
+              Підтримується імпорт виписок Toshl Finance (CSV, XLSX)
             </p>
           </div>
           <button onClick={onClose} className="btn btn-ghost btn-sm" style={{ padding: 4 }}>
@@ -155,7 +155,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                   {isProcessing ? 'Обробка та дедуплікація файлу...' : 'Перетягніть файл сюди або натисніть для вибору'}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                  .XLSX, .XLS або .CSV (Monobank, Моно Бюджет, Toshl тощо)
+                  Файли експорту Toshl Finance (.CSV або .XLSX)
                 </div>
               </div>
 
@@ -224,26 +224,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13 }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Визначений формат:</span>
-                <span className={`badge ${
-                  summary.detectedSource === 'monobank'
-                    ? 'badge-primary'
-                    : summary.detectedSource === 'mono_budget'
-                    ? 'badge-purple'
-                    : summary.detectedSource === 'toshl'
-                    ? 'badge-warning'
-                    : 'badge-default'
-                }`} style={{ textTransform: 'capitalize' }}>
-                  {summary.detectedSource === 'monobank' 
-                    ? 'Виписка Monobank' 
-                    : summary.detectedSource === 'mono_budget'
-                    ? 'Моно Бюджет'
-                    : summary.detectedSource === 'toshl' 
-                    ? 'Toshl Finance' 
-                    : 'Універсальний'}
-                </span>
-              </div>
+              {/* Source format badge hidden on UI for focused Toshl import flow; preserved in data layer */}
 
               {/* Detected Bank Cards / Accounts */}
               {summary.detectedAccounts && summary.detectedAccounts.length > 0 && (

@@ -355,20 +355,7 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
             </select>
           </div>
 
-          {/* Source Filter */}
-          <div style={{ minWidth: 140 }}>
-            <select
-              className="select"
-              value={selectedSourceFilter}
-              onChange={(e) => { setSelectedSourceFilter(e.target.value); setCurrentPage(1); }}
-            >
-              <option value="all">Усі джерела</option>
-              <option value="mono_budget">Моно Бюджет</option>
-              <option value="monobank">Monobank (виписка)</option>
-              <option value="toshl">Toshl Finance</option>
-              <option value="generic">Інші</option>
-            </select>
-          </div>
+          {/* Source Filter (Hidden on UI for single Toshl source focus; retained for future extensibility) */}
 
           {/* Sort Order Button */}
           <button
@@ -423,14 +410,14 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
                 <th style={{ padding: '12px 16px', fontWeight: 600 }}>Опис / Контрагент</th>
                 <th style={{ padding: '12px 16px', fontWeight: 600 }}>Картка</th>
                 <th style={{ padding: '12px 16px', fontWeight: 600 }}>Категорія</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Джерело</th>
+                {/* <th style={{ padding: '12px 16px', fontWeight: 600 }}>Джерело</th> - Retained in data, hidden on UI */}
                 <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>Сума</th>
               </tr>
             </thead>
             <tbody>
               {paginated.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ padding: 48, textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                  <td colSpan={6} style={{ padding: 48, textAlign: 'center', color: 'var(--text-tertiary)' }}>
                     Операцій не знайдено за вашим запитом
                   </td>
                 </tr>
@@ -581,19 +568,7 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
                           ))}
                         </select>
                       </td>
-                      <td style={{ padding: '12px 16px' }}>
-                        <span className={`badge ${
-                          t.source === 'monobank' 
-                            ? 'badge-primary' 
-                            : t.source === 'mono_budget'
-                            ? 'badge-purple'
-                            : t.source === 'toshl' 
-                            ? 'badge-warning' 
-                            : 'badge-secondary'
-                        }`} style={{ textTransform: 'capitalize' }}>
-                          {t.source === 'mono_budget' ? 'Моно Бюджет' : t.source === 'monobank' ? 'Monobank' : t.source === 'toshl' ? 'Toshl' : t.source}
-                        </span>
-                      </td>
+                      {/* Source badge hidden on UI, preserved in data layer */}
                       <td className="tabular-nums" style={{
                         padding: '12px 16px',
                         textAlign: 'right',
