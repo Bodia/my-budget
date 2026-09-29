@@ -25,6 +25,12 @@ import { HeatmapCalendar } from './components/analytics/HeatmapCalendar';
 import { TransactionsExplorer } from './components/transactions/TransactionsExplorer';
 import { ImportModal } from './components/import/ImportModal';
 import { DataManagementModal } from './components/settings/DataManagementModal';
+import { TimeFilterBar } from './components/common/TimeFilterBar';
+import { 
+  getFilterRange, 
+  type TimeFilterMode, 
+  type CustomDateRange 
+} from './utils/dateFilterUtils';
 import type { CurrencyCode } from './types/finance';
 
 export const App: React.FC = () => {
@@ -34,8 +40,9 @@ export const App: React.FC = () => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Time period filter: '1m' | '3m' | '6m' | '12m' | 'all'
-  const [timeRange, setTimeRange] = useState<'1m' | '3m' | '6m' | '12m' | 'all'>('12m');
+  // Time filter state (SCRUM-22)
+  const [filterMode, setFilterMode] = useState<TimeFilterMode>('latest_month');
+  const [customRange, setCustomRange] = useState<CustomDateRange>({ startDate: '', endDate: '' });
 
   // Live queries from Dexie IndexedDB
   const rawTransactions = useLiveQuery(() => db.transactions.toArray(), []);
@@ -71,20 +78,11 @@ export const App: React.FC = () => {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Filter transactions by timeRange and currency
-  const filteredTransactions = useMemo(() => {
+  // Base transactions with currency conversion applied
+  const allCurrencyTransactions = useMemo(() => {
     if (!rawTransactions) return [];
-
     let list = [...rawTransactions];
-    const now = new Date();
 
-    if (timeRange !== 'all') {
-      const months = timeRange === '1m' ? 1 : timeRange === '3m' ? 3 : timeRange === '6m' ? 6 : 12;
-      const cutoff = new Date(now.getFullYear(), now.getMonth() - months, 1).toISOString().slice(0, 10);
-      list = list.filter(t => t.date.slice(0, 10) >= cutoff);
-    }
-
-    // Currency conversion if USD or EUR selected
     if (currency !== 'UAH' && exchangeRates) {
       const rateObj = exchangeRates.find(r => r.currency === currency);
       const rate = rateObj && rateObj.rateToUah > 0 ? rateObj.rateToUah : (currency === 'USD' ? 41.5 : 45.2);
@@ -96,45 +94,37 @@ export const App: React.FC = () => {
     }
 
     return list;
-  }, [rawTransactions, timeRange, currency, exchangeRates]);
+  }, [rawTransactions, currency, exchangeRates]);
 
-  // Previous Period Transactions for Dynamic MoM comparison (SCRUM-9)
+  // Computed Date Range info (SCRUM-22)
+  const computedFilterRange = useMemo(() => {
+    return getFilterRange(filterMode, customRange, rawTransactions || []);
+  }, [filterMode, customRange, rawTransactions]);
+
+  // Filter transactions for Dashboard & Ledger
+  const filteredTransactions = useMemo(() => {
+    if (!allCurrencyTransactions || allCurrencyTransactions.length === 0) return [];
+
+    return allCurrencyTransactions.filter(t => {
+      const dateStr = t.date.slice(0, 10);
+      return dateStr >= computedFilterRange.startDate && dateStr <= computedFilterRange.endDate;
+    });
+  }, [allCurrencyTransactions, computedFilterRange]);
+
+  // Previous Period Transactions for Dynamic MoM comparison (SCRUM-9, SCRUM-22)
   const previousPeriodTransactions = useMemo(() => {
-    if (!rawTransactions || rawTransactions.length === 0) return [];
+    if (!allCurrencyTransactions || allCurrencyTransactions.length === 0) return [];
 
-    let list = [...rawTransactions];
-    const now = new Date();
-
-    if (timeRange !== 'all') {
-      const months = timeRange === '1m' ? 1 : timeRange === '3m' ? 3 : timeRange === '6m' ? 6 : 12;
-      const currentCutoff = new Date(now.getFullYear(), now.getMonth() - months, 1).toISOString().slice(0, 10);
-      const prevCutoff = new Date(now.getFullYear(), now.getMonth() - (months * 2), 1).toISOString().slice(0, 10);
-      list = list.filter(t => t.date.slice(0, 10) >= prevCutoff && t.date.slice(0, 10) < currentCutoff);
-    } else {
-      // For 'all', compare current calendar month with previous calendar month
-      const currentMonthCutoff = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-      const prevMonthCutoff = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10);
-      list = list.filter(t => t.date.slice(0, 10) >= prevMonthCutoff && t.date.slice(0, 10) < currentMonthCutoff);
-    }
-
-    if (currency !== 'UAH' && exchangeRates) {
-      const rateObj = exchangeRates.find(r => r.currency === currency);
-      const rate = rateObj && rateObj.rateToUah > 0 ? rateObj.rateToUah : (currency === 'USD' ? 41.5 : 45.2);
-      list = list.map(t => ({
-        ...t,
-        amount: parseFloat((t.amount / rate).toFixed(2)),
-        currency,
-      }));
-    }
-
-    return list;
-  }, [rawTransactions, timeRange, currency, exchangeRates]);
+    return allCurrencyTransactions.filter(t => {
+      const dateStr = t.date.slice(0, 10);
+      return dateStr >= computedFilterRange.prevStartDate && dateStr <= computedFilterRange.prevEndDate;
+    });
+  }, [allCurrencyTransactions, computedFilterRange]);
 
   // Calculated Analytics with real MoM Deltas
   const kpi = useMemo(() => {
-    const days = timeRange === '1m' ? 30 : timeRange === '3m' ? 90 : timeRange === '6m' ? 180 : 365;
-    return calculateKPIs(filteredTransactions, days, previousPeriodTransactions);
-  }, [filteredTransactions, previousPeriodTransactions, timeRange]);
+    return calculateKPIs(filteredTransactions, computedFilterRange.days, previousPeriodTransactions);
+  }, [filteredTransactions, computedFilterRange.days, previousPeriodTransactions]);
 
   const categoryBreakdown = useMemo(() => {
     return calculateCategoryBreakdown(filteredTransactions, categories || [], budgets || []);
@@ -144,6 +134,15 @@ export const App: React.FC = () => {
     return calculateMonthlyCashflow(filteredTransactions);
   }, [filteredTransactions]);
 
+  // Full cashflow and breakdown for Analytics tab (covers all transactions)
+  const cashflowDataAll = useMemo(() => {
+    return calculateMonthlyCashflow(allCurrencyTransactions);
+  }, [allCurrencyTransactions]);
+
+  const categoryBreakdownAll = useMemo(() => {
+    return calculateCategoryBreakdown(allCurrencyTransactions, categories || [], budgets || []);
+  }, [allCurrencyTransactions, categories, budgets]);
+
   const topMerchants = useMemo(() => {
     return calculateTopMerchants(filteredTransactions, 8);
   }, [filteredTransactions]);
@@ -152,9 +151,10 @@ export const App: React.FC = () => {
     return calculateUtilitiesStatus(filteredTransactions);
   }, [filteredTransactions]);
 
+  // Smart savings operates over all transactions
   const savingsInsights = useMemo(() => {
-    return analyzeSavingsOpportunities(filteredTransactions, categories || []);
-  }, [filteredTransactions, categories]);
+    return analyzeSavingsOpportunities(allCurrencyTransactions, categories || []);
+  }, [allCurrencyTransactions, categories]);
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -197,67 +197,46 @@ export const App: React.FC = () => {
 
       {/* Main Container */}
       <main style={{ maxWidth: 1400, margin: '0 auto', width: '100%', padding: '24px', flex: 1 }}>
-        {/* Global Filter Bar: Period Selection */}
+        {/* Page Title & Subtitle */}
         <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 16,
-          marginBottom: 24,
+          marginBottom: (activeTab === 'dashboard' || activeTab === 'transactions') ? 16 : 24,
         }}>
-          <div>
-            <h1 style={{
-              fontSize: 24,
-              fontWeight: 700,
-              fontFamily: 'var(--font-display)',
-              color: 'var(--text-primary)',
-              letterSpacing: '-0.02em',
-              margin: 0,
-            }}>
-              {activeTab === 'dashboard' && 'Огляд фінансів & Дашборд'}
-              {activeTab === 'analytics' && 'Глибока аналітика & Календар витрат'}
-              {activeTab === 'insights' && 'Розумна економія (Де можна заощадити)'}
-              {activeTab === 'transactions' && 'Журнал транзакцій та операцій'}
-              {activeTab === 'settings' && 'Керування даними, бекапи та правила'}
-            </h1>
-            <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
-              {activeTab === 'dashboard' && 'Ключові метрики, діаграми структури витрат та бюджети'}
-              {activeTab === 'analytics' && 'Щоденна теплова карта та динаміка грошового потоку'}
-              {activeTab === 'insights' && 'Персоналізовані рекомендації щодо скорочення перевитрат'}
-              {activeTab === 'transactions' && 'Пошук, фільтрація та налаштування категорій'}
-              {activeTab === 'settings' && 'Експорт / імпорт бекапу, налаштування лімітів та авто-мапінгу'}
-            </p>
-          </div>
-
-          {/* Time range pills */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            background: 'var(--bg-surface)',
-            padding: 4,
-            borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--border-default)',
+          <h1 style={{
+            fontSize: 24,
+            fontWeight: 700,
+            fontFamily: 'var(--font-display)',
+            color: 'var(--text-primary)',
+            letterSpacing: '-0.02em',
+            margin: 0,
           }}>
-            {[
-              { id: '1m', label: '1 місяць' },
-              { id: '3m', label: '3 місяці' },
-              { id: '6m', label: '6 місяців' },
-              { id: '12m', label: '1 рік' },
-              { id: 'all', label: 'Всі часи' },
-            ].map((p) => (
-              <button
-                key={p.id}
-                onClick={() => setTimeRange(p.id as any)}
-                className={`btn btn-sm ${timeRange === p.id ? 'btn-primary' : 'btn-ghost'}`}
-                style={{ fontSize: 12, padding: '4px 10px' }}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
+            {activeTab === 'dashboard' && 'Огляд фінансів & Дашборд'}
+            {activeTab === 'analytics' && 'Глибока аналітика & Календар витрат'}
+            {activeTab === 'insights' && 'Розумна економія (Де можна заощадити)'}
+            {activeTab === 'transactions' && 'Журнал транзакцій та операцій'}
+            {activeTab === 'settings' && 'Керування даними, бекапи та правила'}
+          </h1>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
+            {activeTab === 'dashboard' && 'Ключові метрики, діаграми структури витрат та бюджети'}
+            {activeTab === 'analytics' && 'Щоденна теплова карта та динаміка грошового потоку'}
+            {activeTab === 'insights' && 'Персоналізовані рекомендації щодо скорочення перевитрат'}
+            {activeTab === 'transactions' && 'Пошук, фільтрація та налаштування категорій'}
+            {activeTab === 'settings' && 'Експорт / імпорт бекапу, налаштування лімітів та авто-мапінгу'}
+          </p>
         </div>
+
+        {/* TimeFilterBar: Only shown on Dashboard and Transactions (SCRUM-22) */}
+        {(activeTab === 'dashboard' || activeTab === 'transactions') && (
+          <div style={{ marginBottom: 24 }}>
+            <TimeFilterBar
+              mode={filterMode}
+              onChangeMode={setFilterMode}
+              customRange={customRange}
+              onChangeCustomRange={setCustomRange}
+              computedRange={computedFilterRange}
+              currentSystemYear={new Date().getFullYear()}
+            />
+          </div>
+        )}
 
         {/* TAB 1: DASHBOARD */}
         {activeTab === 'dashboard' && (
@@ -355,15 +334,15 @@ export const App: React.FC = () => {
         {activeTab === 'analytics' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             {/* Heatmap Calendar */}
-            <HeatmapCalendar transactions={filteredTransactions} />
+            <HeatmapCalendar transactions={allCurrencyTransactions} />
 
             {/* Cashflow dynamics chart */}
-            <CashflowChart data={cashflowData} />
+            <CashflowChart data={cashflowDataAll} />
 
             {/* Category Breakdown Table */}
             <div className="ant-card" style={{ padding: 24 }}>
               <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-display)', marginBottom: 16 }}>
-                Детальний розподіл витрат за категоріями
+                Детальний розподіл витрат за категоріями (Вся історія)
               </h3>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
@@ -376,7 +355,7 @@ export const App: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {categoryBreakdown.map((c) => (
+                    {categoryBreakdownAll.map((c) => (
                       <tr key={c.categoryId} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                         <td style={{ padding: '12px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -406,7 +385,7 @@ export const App: React.FC = () => {
         {activeTab === 'insights' && (
           <SmartSavingsView
             insights={savingsInsights}
-            transactions={filteredTransactions}
+            transactions={allCurrencyTransactions}
             onSetBudget={() => setActiveTab('settings')}
           />
         )}
@@ -426,7 +405,7 @@ export const App: React.FC = () => {
             categories={categories || []}
             budgets={budgets || []}
             rules={rules || []}
-            transactions={filteredTransactions}
+            transactions={allCurrencyTransactions}
             onReload={() => showToast('Дані успішно оновлено')}
           />
         )}
