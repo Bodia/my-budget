@@ -186,6 +186,7 @@ export async function processStatementFile(file: File): Promise<ImportSummary> {
   // Detect format
   let detectedSource: 'monobank' | 'mono_budget' | 'toshl' | 'generic' = 'generic';
   let draftTransactions: Transaction[] = [];
+  let unresolvedRows: import('../../types/finance').UnresolvedDateRow[] = [];
 
   const existingAccounts = await db.accounts.toArray();
   const defaultCardAcc = existingAccounts.find(a => a.id === 'monobank_black' || a.type === 'bank_card');
@@ -193,7 +194,9 @@ export async function processStatementFile(file: File): Promise<ImportSummary> {
   // Prioritize Toshl statement parser as primary import source
   if (isToshlStatement(headers)) {
     detectedSource = 'toshl';
-    draftTransactions = await parseToshlRows(rawRows);
+    const toshlRes = await parseToshlRows(rawRows);
+    draftTransactions = toshlRes.transactions;
+    unresolvedRows = toshlRes.unresolvedRows;
   } else if (isMonoBudgetStatement(headers)) {
     detectedSource = 'mono_budget';
     draftTransactions = await parseMonoBudgetRows(rawRows);
@@ -208,7 +211,9 @@ export async function processStatementFile(file: File): Promise<ImportSummary> {
   } else {
     // Default fallback to Toshl parser
     detectedSource = 'toshl';
-    draftTransactions = await parseToshlRows(rawRows);
+    const toshlRes = await parseToshlRows(rawRows);
+    draftTransactions = toshlRes.transactions;
+    unresolvedRows = toshlRes.unresolvedRows;
   }
 
   // Reconcile and extract cards/accounts from the document
@@ -227,13 +232,14 @@ export async function processStatementFile(file: File): Promise<ImportSummary> {
   return {
     fileName: file.name,
     detectedSource,
-    totalRows: draftTransactions.length,
+    totalRows: draftTransactions.length + unresolvedRows.length,
     newRows: unique.length,
     duplicateRows: duplicatesCount,
     previewRows: unique.slice(0, 8),
     draftTransactions: unique,
     detectedAccounts,
     newAccounts,
+    unresolvedRows: unresolvedRows.length > 0 ? unresolvedRows : undefined,
   };
 }
 

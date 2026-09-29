@@ -99,6 +99,18 @@ export interface SavingInsight {
   actionPayload?: any;
 }
 
+export interface UnresolvedDateRow {
+  rowIndex: number;
+  rawRow: Record<string, any>;
+  description: string;
+  amount: number;
+  currency: string;
+  originalCategory?: string;
+  account?: string;
+  rawDate: string;
+  errorReason: string;
+}
+
 export interface ImportSummary {
   fileName: string;
   detectedSource: 'monobank' | 'mono_budget' | 'toshl' | 'generic';
@@ -109,6 +121,7 @@ export interface ImportSummary {
   draftTransactions: Transaction[];
   detectedAccounts?: Account[]; // All accounts detected in document
   newAccounts?: Account[];      // Accounts that will be newly created in DB
+  unresolvedRows?: UnresolvedDateRow[]; // Rows requiring user date resolution (SCRUM-19)
 }
 
 export interface DateFilterRange {

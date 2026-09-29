@@ -119,8 +119,12 @@ export const TransactionsExplorer: React.FC<TransactionsExplorerProps> = ({
     }
 
     list.sort((a, b) => {
-      const timeA = new Date(a.date).getTime();
-      const timeB = new Date(b.date).getTime();
+      const parseTime = (d: string) => {
+        if (!d) return 0;
+        return new Date(d.length === 10 ? `${d}T00:00:00` : d).getTime();
+      };
+      const timeA = parseTime(a.date);
+      const timeB = parseTime(b.date);
       return sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
     });
 

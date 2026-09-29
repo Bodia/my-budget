@@ -9,8 +9,9 @@ import {
   CreditCard,
   Sparkles
 } from 'lucide-react';
-import type { ImportSummary, Account } from '../../types/finance';
+import type { ImportSummary, Account, UnresolvedDateRow } from '../../types/finance';
 import { processStatementFile, commitImport } from '../../services/parsers/ingestionManager';
+import { parseAndValidateToshlDate, createTransactionFromResolvedDate } from '../../services/parsers/toshlAdapter';
 import { formatUah } from '../../services/analytics/kpiCalculator';
 import { CardBadge } from '../cards/CardBadge';
 
@@ -29,6 +30,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
   const [editableNewAccounts, setEditableNewAccounts] = useState<Account[]>([]);
+  const [unresolvedRows, setUnresolvedRows] = useState<UnresolvedDateRow[]>([]);
+  const [resolvedDates, setResolvedDates] = useState<Record<number, string>>({});
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -42,11 +45,37 @@ export const ImportModal: React.FC<ImportModalProps> = ({
       const res = await processStatementFile(file);
       setSummary(res);
       setEditableNewAccounts(res.newAccounts || []);
+      setUnresolvedRows(res.unresolvedRows || []);
+      setResolvedDates({});
     } catch (err: any) {
       setErrorMessage(err.message || 'Помилка при читанні файлу. Перевірте формат виписки.');
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleApplyResolvedDate = async (row: UnresolvedDateRow, dateInput: string) => {
+    const check = parseAndValidateToshlDate(dateInput);
+    if (!check.isValid || !check.isoDate) {
+      alert(`Некоректна дата "${dateInput}". Вкажіть дійсний день календаря у форматі ДД.ММ.РРРР (наприклад: 24.08.2024)`);
+      return;
+    }
+    const tx = await createTransactionFromResolvedDate(row, check.isoDate);
+    setSummary(prev => {
+      if (!prev) return prev;
+      const updatedDrafts = [tx, ...prev.draftTransactions];
+      return {
+        ...prev,
+        draftTransactions: updatedDrafts,
+        newRows: updatedDrafts.length,
+        previewRows: updatedDrafts.slice(0, 8),
+      };
+    });
+    setUnresolvedRows(prev => prev.filter(r => r.rowIndex !== row.rowIndex));
+  };
+
+  const handleDismissUnresolvedRow = (rowIndex: number) => {
+    setUnresolvedRows(prev => prev.filter(r => r.rowIndex !== rowIndex));
   };
 
   const onDrop = (e: React.DragEvent) => {
@@ -199,7 +228,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
+                gridTemplateColumns: unresolvedRows.length > 0 ? 'repeat(4, 1fr)' : 'repeat(3, 1fr)',
                 gap: 12,
               }}>
                 <div style={{ padding: 14, background: 'var(--bg-surface-hover)', borderRadius: 'var(--radius-sm)', textAlign: 'center' }}>
@@ -222,7 +251,121 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                     {summary.duplicateRows}
                   </div>
                 </div>
+
+                {unresolvedRows.length > 0 && (
+                  <div style={{ padding: 14, background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: 'var(--radius-sm)', textAlign: 'center' }}>
+                    <div style={{ fontSize: 11, color: 'var(--danger)' }}>Потребують дати</div>
+                    <div className="tabular-nums" style={{ fontSize: 22, fontWeight: 700, color: 'var(--danger)' }}>
+                      {unresolvedRows.length}
+                    </div>
+                  </div>
+                )}
               </div>
+
+              {/* Unresolved Rows with Missing or Invalid Date (SCRUM-19) */}
+              {unresolvedRows.length > 0 && (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10,
+                  padding: 14,
+                  background: 'rgba(245, 158, 11, 0.06)',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1.5px solid rgba(245, 158, 11, 0.35)',
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: 6,
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                      <AlertCircle size={16} color="var(--warning)" />
+                      <span>Рядки з пропущеною або пошкодженою датою ({unresolvedRows.length}):</span>
+                    </div>
+                    <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                      Вкажіть дату (ДД.ММ.РРРР), щоб включити до імпорту
+                    </span>
+                  </div>
+
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8,
+                    maxHeight: 200,
+                    overflowY: 'auto',
+                    paddingRight: 4,
+                  }}>
+                    {unresolvedRows.map((row) => (
+                      <div
+                        key={row.rowIndex}
+                        style={{
+                          padding: '10px 12px',
+                          borderRadius: 'var(--radius-xs)',
+                          background: 'var(--bg-surface)',
+                          border: '1px solid var(--border-default)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 12,
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <div style={{ flex: '1 1 200px', minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>
+                            {row.description}
+                          </div>
+                          <div style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 2 }}>
+                            <span className="tabular-nums" style={{ fontWeight: 600, color: row.amount < 0 ? 'var(--danger)' : 'var(--success)' }}>
+                              {formatUah(row.amount)}
+                            </span>
+                            <span>•</span>
+                            <span style={{ color: 'var(--danger)' }}>
+                              {row.rawDate ? `Значення: "${row.rawDate}" (${row.errorReason})` : 'Дата відсутня'}
+                            </span>
+                          </div>
+                        </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <input
+                        type="date"
+                        value={resolvedDates[row.rowIndex] ?? ''}
+                        onChange={(e) => setResolvedDates({ ...resolvedDates, [row.rowIndex]: e.target.value })}
+                        className="input"
+                        style={{
+                          width: 135,
+                          height: 32,
+                          fontSize: 12,
+                          padding: '3px 8px',
+                          cursor: 'pointer',
+                        }}
+                        title="Оберіть дату через календар"
+                      />
+                      <button
+                        type="button"
+                        disabled={!resolvedDates[row.rowIndex]}
+                        onClick={() => handleApplyResolvedDate(row, resolvedDates[row.rowIndex] || '')}
+                        className="btn btn-primary btn-sm"
+                        style={{ height: 32, padding: '0 10px', fontSize: 11, fontWeight: 600 }}
+                      >
+                        Додати
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDismissUnresolvedRow(row.rowIndex)}
+                        className="btn btn-ghost btn-sm"
+                        style={{ height: 32, padding: '0 6px', color: 'var(--text-tertiary)' }}
+                        title="Пропустити цей рядок"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
               {/* Source format badge hidden on UI for focused Toshl import flow; preserved in data layer */}
 

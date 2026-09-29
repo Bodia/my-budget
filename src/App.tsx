@@ -80,8 +80,8 @@ export const App: React.FC = () => {
 
     if (timeRange !== 'all') {
       const months = timeRange === '1m' ? 1 : timeRange === '3m' ? 3 : timeRange === '6m' ? 6 : 12;
-      const cutoff = new Date(now.getFullYear(), now.getMonth() - months, 1).toISOString();
-      list = list.filter(t => t.date >= cutoff);
+      const cutoff = new Date(now.getFullYear(), now.getMonth() - months, 1).toISOString().slice(0, 10);
+      list = list.filter(t => t.date.slice(0, 10) >= cutoff);
     }
 
     // Currency conversion if USD or EUR selected
@@ -107,14 +107,14 @@ export const App: React.FC = () => {
 
     if (timeRange !== 'all') {
       const months = timeRange === '1m' ? 1 : timeRange === '3m' ? 3 : timeRange === '6m' ? 6 : 12;
-      const currentCutoff = new Date(now.getFullYear(), now.getMonth() - months, 1).toISOString();
-      const prevCutoff = new Date(now.getFullYear(), now.getMonth() - (months * 2), 1).toISOString();
-      list = list.filter(t => t.date >= prevCutoff && t.date < currentCutoff);
+      const currentCutoff = new Date(now.getFullYear(), now.getMonth() - months, 1).toISOString().slice(0, 10);
+      const prevCutoff = new Date(now.getFullYear(), now.getMonth() - (months * 2), 1).toISOString().slice(0, 10);
+      list = list.filter(t => t.date.slice(0, 10) >= prevCutoff && t.date.slice(0, 10) < currentCutoff);
     } else {
       // For 'all', compare current calendar month with previous calendar month
-      const currentMonthCutoff = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-      const prevMonthCutoff = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
-      list = list.filter(t => t.date >= prevMonthCutoff && t.date < currentMonthCutoff);
+      const currentMonthCutoff = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+      const prevMonthCutoff = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10);
+      list = list.filter(t => t.date.slice(0, 10) >= prevMonthCutoff && t.date.slice(0, 10) < currentMonthCutoff);
     }
 
     if (currency !== 'UAH' && exchangeRates) {
