@@ -81,6 +81,10 @@ export interface Account {
   cardNumberMasked?: string;// Formatted masked card e.g. "**** **** **** 1234"
   color?: string;           // Optional accent color for the card
   role?: 'shared_family' | 'personal' | 'cashback_national' | 'business' | 'general'; // Contextual account role
+  balance?: number;         // Current live balance (in standard currency e.g. UAH)
+  creditLimit?: number;     // Credit limit (in standard currency e.g. UAH)
+  monobankAccountId?: string; // Associated Monobank account ID from API
+  lastSyncedAt?: string;    // ISO timestamp of last successful sync
 }
 
 export type InsightType = 'subscription' | 'spike' | 'latte_factor' | 'budget_50_30_20';

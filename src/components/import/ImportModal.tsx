@@ -13,6 +13,7 @@ import type { ImportSummary, Account } from '../../types/finance';
 import { processStatementFile, commitImport } from '../../services/parsers/ingestionManager';
 import { formatUah } from '../../services/analytics/kpiCalculator';
 import { CardBadge } from '../cards/CardBadge';
+import { MonobankSyncTab } from './MonobankSyncTab';
 
 interface ImportModalProps {
   isOpen: boolean;
@@ -25,6 +26,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
   onClose,
   onSuccess,
 }) => {
+  const [importTab, setImportTab] = useState<'file' | 'monobank'>('file');
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
@@ -101,16 +103,70 @@ export const ImportModal: React.FC<ImportModalProps> = ({
           </button>
         </div>
 
-        {/* Modal Body */}
-        <div className="modal-body" style={{
-          padding: 24,
+        {/* Tab Switcher */}
+        <div style={{
           display: 'flex',
-          flexDirection: 'column',
-          gap: 20,
-          flex: '1 1 auto',
-          minHeight: 0,
-          overflowY: 'auto',
+          borderBottom: '1px solid var(--border-default)',
+          background: 'var(--bg-surface-hover)',
+          padding: '0 24px',
+          gap: 16,
         }}>
+          <button
+            type="button"
+            onClick={() => setImportTab('file')}
+            style={{
+              padding: '12px 4px',
+              fontSize: 13,
+              fontWeight: importTab === 'file' ? 700 : 500,
+              color: importTab === 'file' ? 'var(--primary)' : 'var(--text-secondary)',
+              borderBottom: importTab === 'file' ? '2px solid var(--primary)' : '2px solid transparent',
+              background: 'none',
+              borderTop: 'none',
+              borderLeft: 'none',
+              borderRight: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            📁 Завантаження файлу (.xlsx, .csv)
+          </button>
+          <button
+            type="button"
+            onClick={() => setImportTab('monobank')}
+            style={{
+              padding: '12px 4px',
+              fontSize: 13,
+              fontWeight: importTab === 'monobank' ? 700 : 500,
+              color: importTab === 'monobank' ? 'var(--primary)' : 'var(--text-secondary)',
+              borderBottom: importTab === 'monobank' ? '2px solid var(--primary)' : '2px solid transparent',
+              background: 'none',
+              borderTop: 'none',
+              borderLeft: 'none',
+              borderRight: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            <span>⚡ Monobank Personal API</span>
+            <span className="badge badge-success" style={{ fontSize: 9, padding: '2px 5px' }}>Direct</span>
+          </button>
+        </div>
+
+        {importTab === 'monobank' ? (
+          <MonobankSyncTab onSuccess={onSuccess} onClose={onClose} />
+        ) : (
+          <>
+            {/* Modal Body */}
+            <div className="modal-body" style={{
+              padding: 24,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 20,
+              flex: '1 1 auto',
+              minHeight: 0,
+              overflowY: 'auto',
+            }}>
           {!summary ? (
             <>
               {/* Dropzone */}
@@ -437,6 +493,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({
             </button>
           )}
         </div>
+        </>
+        )}
       </div>
     </div>
   );

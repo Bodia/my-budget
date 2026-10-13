@@ -14,6 +14,11 @@ import { db } from '../../db/database';
 import { CardNumberInput } from '../cards/CardNumberInput';
 import { CardBadge } from '../cards/CardBadge';
 import { formatCardMask, isValidCardLast4 } from '../../utils/cardUtils';
+import { formatUah } from '../../services/analytics/kpiCalculator';
+import { hasStoredToken, loadDecryptedToken } from '../../services/monobank/security';
+import { MonobankClient } from '../../services/monobank/monobankClient';
+import { reconcileMonobankAccounts } from '../../services/monobank/monobankApiAdapter';
+import { Loader2, RefreshCw } from 'lucide-react';
 
 const PRESET_COLORS = [
   { label: 'Синій', hex: '#1677ff' },
@@ -33,6 +38,7 @@ export const CardsManager: React.FC<CardsManagerProps> = ({ onNotify }) => {
   
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isSyncingBalances, setIsSyncingBalances] = useState(false);
 
   // Form fields
   const [cardName, setCardName] = useState('');
@@ -40,6 +46,33 @@ export const CardsManager: React.FC<CardsManagerProps> = ({ onNotify }) => {
   const [currency, setCurrency] = useState<CurrencyCode>('UAH');
   const [selectedColor, setSelectedColor] = useState<string>('#1677ff');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const handleRefreshBalances = async () => {
+    setIsSyncingBalances(true);
+    try {
+      const token = await loadDecryptedToken();
+      if (!token) {
+        onNotify?.('Токен Monobank не знайдено або не налаштовано');
+        return;
+      }
+      const client = new MonobankClient();
+      const info = await client.fetchClientInfo(token);
+      const currentAccs = await db.accounts.toArray();
+      const { updatedExisting, newAccounts } = reconcileMonobankAccounts(info.accounts, currentAccs);
+
+      for (const a of updatedExisting) {
+        await db.accounts.update(a.id, a);
+      }
+      for (const a of newAccounts) {
+        await db.accounts.add(a);
+      }
+      onNotify?.(`Успішно оновлено баланси ${updatedExisting.length + newAccounts.length} карток з Monobank!`);
+    } catch (err: any) {
+      onNotify?.('Помилка оновлення балансів: ' + err.message);
+    } finally {
+      setIsSyncingBalances(false);
+    }
+  };
 
   const resetForm = () => {
     setCardName('');
@@ -151,15 +184,33 @@ export const CardsManager: React.FC<CardsManagerProps> = ({ onNotify }) => {
           </p>
         </div>
 
-        {!isAdding && (
-          <button
-            onClick={() => { resetForm(); setIsAdding(true); }}
-            className="btn btn-primary btn-sm"
-          >
-            <Plus size={14} />
-            <span>Додати картку</span>
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {hasStoredToken() && (
+            <button
+              onClick={handleRefreshBalances}
+              disabled={isSyncingBalances}
+              className="btn btn-secondary btn-sm"
+              title="Швидке оновлення балансів карток через Monobank Personal API"
+            >
+              {isSyncingBalances ? (
+                <Loader2 size={13} className="spin" />
+              ) : (
+                <RefreshCw size={13} />
+              )}
+              <span>{isSyncingBalances ? 'Оновлення...' : 'Оновити баланси'}</span>
+            </button>
+          )}
+
+          {!isAdding && (
+            <button
+              onClick={() => { resetForm(); setIsAdding(true); }}
+              className="btn btn-primary btn-sm"
+            >
+              <Plus size={14} />
+              <span>Додати картку</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Add / Edit Form */}
@@ -339,6 +390,18 @@ export const CardsManager: React.FC<CardsManagerProps> = ({ onNotify }) => {
                       {acc.currency}
                     </span>
                   </div>
+                  {acc.balance !== undefined && (
+                    <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                        {formatUah(acc.balance)} {acc.currency === 'UAH' ? '₴' : acc.currency}
+                      </span>
+                      {acc.monobankAccountId && (
+                        <span className="badge badge-success" style={{ fontSize: 9, padding: '2px 5px' }}>
+                          LIVE API
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 

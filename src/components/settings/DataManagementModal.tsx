@@ -11,6 +11,8 @@ import { CardsManager } from './CardsManager';
 import { CategoryManager } from './CategoryManager';
 import { BudgetLimitsManager } from './BudgetLimitsManager';
 import { reclassifyAllTransactions } from '../../services/intelligence/recognitionEngine';
+import { hasStoredToken, clearStoredToken } from '../../services/monobank/security';
+import { ShieldCheck, KeyRound } from 'lucide-react';
 
 interface DataManagementModalProps {
   categories: Category[];
@@ -149,6 +151,63 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({
             <Trash2 size={15} />
             <span>Очистити базу</span>
           </button>
+        </div>
+      </div>
+
+      {/* Monobank API Integration Status (SCRUM-23) */}
+      <div className="ant-card" style={{ padding: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div>
+            <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-display)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <KeyRound size={18} color="var(--primary)" />
+              <span>Інтеграція з Monobank Personal API</span>
+            </h3>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+              Пряме підключення до api.monobank.ua для вивантаження виписок та живих балансів
+            </p>
+          </div>
+          {hasStoredToken() ? (
+            <span className="badge badge-success" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <ShieldCheck size={12} /> Зашифровано AES-GCM
+            </span>
+          ) : (
+            <span className="badge badge-secondary">Не підключено</span>
+          )}
+        </div>
+
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '12px 16px',
+          background: 'var(--bg-surface-hover)',
+          borderRadius: 'var(--radius-sm)',
+          fontSize: 13,
+        }}>
+          <div>
+            <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+              {hasStoredToken() ? 'Токен активний та збережений у безпечному сховищі' : 'Токен відсутній'}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+              {hasStoredToken()
+                ? 'Ви можете виконувати імпорт та оновлювати баланси карток в 1 клік'
+                : 'Перейдіть у вікно імпорту (вкладка Monobank API), щоб підключити ваш токен'}
+            </div>
+          </div>
+          {hasStoredToken() && (
+            <button
+              onClick={() => {
+                if (confirm('Видалити збережений токен Monobank?')) {
+                  clearStoredToken();
+                  onReload();
+                }
+              }}
+              className="btn btn-ghost btn-sm"
+              style={{ color: 'var(--danger)', fontSize: 12 }}
+            >
+              Видалити токен
+            </button>
+          )}
         </div>
       </div>
 
